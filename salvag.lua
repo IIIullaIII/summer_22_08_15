@@ -57,7 +57,8 @@ function salvag.on_rightclick(self, clicker)
 		default.player_attached[name] = false
 		default.player_set_animation(clicker, "stand" , 30)
 		local pos = clicker:getpos()
-		pos = {x = pos.x, y = pos.y + 0.2, z = pos.z}
+		pos = {x = pos.x, y = pos.y + 1, z = pos.z}		
+		clicker:set_eye_offset({x = 0, y = 0.2, z = 0}, {x = 0, y = 0, z = 0})
 		minetest.after(0.1, function()
 			clicker:setpos(pos)
 		end)
@@ -72,10 +73,11 @@ function salvag.on_rightclick(self, clicker)
 		end
 		self.driver = clicker
 		clicker:set_attach(self.object, "",
-			{x = 0, y = 11, z = -3}, {x = 0, y = 0, z = 0})
-		default.player_attached[name] = true
+			{x = 0, y = -10, z = 0}, {x = 0, y = 0, z = 0})
+					clicker:set_eye_offset({x = 0, y = -8, z = 0}, {x = 0, y = 0, z = 0})
+			default.player_attached[name] = true
 		minetest.after(0.2, function()
-			default.player_set_animation(clicker, "sit" , 30)
+			default.player_set_animation(clicker, "stand" , 30)
 		end)
 		self.object:setyaw(clicker:get_look_yaw() - math.pi / 2)
 	end

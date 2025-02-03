@@ -29,7 +29,7 @@ minetest.register_node("summer:roccia_1", {
 minetest.register_node("summer:desert_roccia_1", {
     description = "Desert Roccia",
     drawtype = "mesh",
-    mesh = "desert_roccia.obj",
+    mesh = "roccia.obj",
 	tiles = {"desert_roccia.png"},
     paramtype = "light",
 	    paramtype2 = "facedir",
@@ -74,7 +74,7 @@ minetest.register_node("summer:roccia_2", {
 minetest.register_node("summer:desert_roccia_2", {
     description = "Desert Roccia",
     drawtype = "mesh",
-    mesh = "desert_roccia.obj",
+    mesh = "roccia.obj",
 	tiles = {"desert_roccia.png"},
     paramtype = "light",
 	    paramtype2 = "facedir",
@@ -96,7 +96,7 @@ minetest.register_on_generated(function(minp, maxp, seed)
 		-- Generate roccias
 		local perlin1 = minetest.get_perlin(329, 3, 0.6, 100)
 		-- Assume X and Z lengths are equal
-		local divlen = 16
+		local divlen = 32
 		local divs = (maxp.x-minp.x)/divlen+1;
 		for divx=0,divs-1 do
 		for divz=0,divs-1 do
