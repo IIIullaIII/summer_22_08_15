@@ -17,11 +17,11 @@ for i in ipairs(Ombrellone_list) do
 	    description = ombrellonedesc.."",
 	    drawtype = "mesh",
 		mesh = "omb_o.obj",
-	    tiles = {"ball_"..colour..".png",
-	    },	    
+	    tiles = {"ball_"..colour..".png"},
+	    	    
         inventory_image = "ombo_"..colour.."_q.png",
 	    
-       wield_image  = {"ombo_"..colour.."_q.png"},
+       wield_image  = "ombo_"..colour.."_q.png",
 	    paramtype = "light",
 	    paramtype2 = "facedir",
 	    sunlight_propagates = true,
@@ -44,11 +44,11 @@ minetest.register_node("summer:ombrellone_"..colour.."_ch", {
 	    description = ombrellonedesc.." ch",
 	    drawtype = "mesh",
 		mesh = "omb_c.obj",
-	    tiles = {"ball_"..colour..".png",
-	    },
+	    tiles = {"ball_"..colour..".png"},
+	    
         inventory_image = "ombc_"..colour.."_q.png",
 	    
-        wield_image  = {"ombc_"..colour.."_q.png"},
+        wield_image  = "ombc_"..colour.."_q.png",
 	    paramtype = "light",
 	    paramtype2 = "facedir",
 	    sunlight_propagates = true,

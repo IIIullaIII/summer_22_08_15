@@ -24,12 +24,12 @@ for i in ipairs(Porta_list) do
 	    description = portadesc.."",
 	    drawtype = "mesh",
 		mesh = "porta_2.obj",
-	    tiles = {"porta_"..colour..".png",
-	    },	    
+	    tiles = "porta_"..colour..".png",
+	    	    
        inventory_image = "summer_p_"..colour..".png",
 	    
-        wield_image  = {"summer_p_"..colour..".png",
-	   },
+        wield_image  = "summer_p_"..colour..".png",
+	   
 	    paramtype = "light",
 	    paramtype2 = "facedir",
 	    sunlight_propagates = true,
@@ -64,12 +64,12 @@ minetest.register_node("summer:porta_"..colour.."_ch", {
 	    description = portadesc.." ch",
 	    drawtype = "mesh",
 		mesh = "porta.obj",
-	    tiles = {"porta_"..colour..".png",
-	    },
+	    tiles = "porta_"..colour..".png",
+	    
         inventory_image = "summer_p_"..colour..".png",
 	    
-        wield_image  = {"summer_p_"..colour..".png",
-	    },
+        wield_image  = "summer_p_"..colour..".png",
+	    
 	    paramtype = "light",
 	    paramtype2 = "facedir",
 	    sunlight_propagates = true,
