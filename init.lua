@@ -24,6 +24,8 @@ dofile(path.."/mattone.lua")
 dofile(path.."/pietra.lua")
 dofile(path.."/pallone.lua")
 dofile(path.."/granite.lua")
+dofile(path.."/lib.lua")
 if minetest.get_modpath("cannabis") then
 dofile(path.."/canapa.lua")
 end
+
