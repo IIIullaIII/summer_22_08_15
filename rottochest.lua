@@ -57,7 +57,7 @@ local function get_chest_formspec(pos, meta, confirm_clear)
 		local line3 = minetest.colorize("#FF0000", S("THIS WILL DELETE ALL ITEMS IN THE CHEST FOREVER"))
 		local full_warning = line1 .. line2 .. line3
 
-		return "formspec_version[4]" ..
+		return "formspec_version[6]" ..
 			"size[14,5.5]" ..
 			"bgcolor[#080808BB;true]" ..
 			"background[0,0;14,5.5;gui_formbg.png;true]" ..
@@ -67,7 +67,7 @@ local function get_chest_formspec(pos, meta, confirm_clear)
 			"button[9,4.0;3,1;confirm_clear_no;" .. S("No") .. "]"
 	end
 
-	return "formspec_version[4]" ..
+	return "formspec_version[6]" ..
 		"size[22,19.5]" ..
 		"background[0,0;0,0;summer_chest_bg.png;true]" ..
 		default.gui_slots ..
@@ -167,7 +167,11 @@ minetest.register_on_player_receive_fields(function(player, formname, fields)
 		close_chest_sound(player)
 	end
 end)
---_____ Modern chests - snippet 2: node registration with unified network compatibility _____--
+--_____ Modern chests - snippet 2: node registration with built-in compatibility _____--
+
+local pipeworks_infotext = function(pos)
+	return minetest.get_meta(pos):get_string("infotext")
+end
 
 local function automation_allowed(pos, player_name)
 	local owner = minetest.get_meta(pos):get_string("owner")
@@ -183,8 +187,7 @@ for _, colour in ipairs(colors) do
 			"chest_side_" .. colour .. ".png", "chest_side_" .. colour .. ".png",
 			"chest_side_" .. colour .. ".png", "chest_front_" .. colour .. ".png"
 		},
-		-- Group merge: 'tubed=1' enables Pipeworks, while 'tubedevice=1' and 'tubedevice_receiver=1' enable Tubelib2/TechAge
-		groups = {choppy = 2, oddly_breakable_by_hand = 2, tubed = 1, tubedevice = 1, tubedevice_receiver = 1, hopper_container = 1},
+		groups = {choppy = 2, oddly_breakable_by_hand = 2, tubed = 1, hopper_container = 1},
 		paramtype2 = "facedir",
 		on_place = minetest.rotate_node,
 		on_construct = function(pos)
@@ -195,7 +198,7 @@ for _, colour in ipairs(colors) do
 			inv:set_size("main", 16 * 8)
 		end,
 
-		--_____ Automatic network ID initialization required by TechAge pipes for visual bends _____--
+		--_____ Automatic network ID initialization to enable TechAge pipe geometry paths _____--
 		after_place_node = function(pos, placer, itemstack, pointed_thing)
 			if minetest.get_modpath("techage") and techage.add_node then
 				local meta = minetest.get_meta(pos)
@@ -237,7 +240,7 @@ for _, colour in ipairs(colors) do
 			})
 		end,
 
-		--_____ Native 6-sided Pipeworks structure _____--
+		--_____ Native Pipeworks compatibility methods _____--
 		pipeworks = {
 			connect_sides = {top = 1, bottom = 1, back = 1, left = 1, right = 1, front = 1},
 			insert_object = function(pos, node, stack, direction)
@@ -246,20 +249,12 @@ for _, colour in ipairs(colors) do
 			remove_items = function(pos, node, stack, count)
 				return minetest.get_meta(pos):get_inventory():take_item("main", count)
 			end,
-			get_infotext = function(pos) return minetest.get_meta(pos):get_string("infotext") end
+			get_infotext = pipeworks_infotext
 		},
 
-		--_____ Native 6-sided tube structure required by older Pipeworks versions for compatibility _____--
-		tube = {
-			insert_object = function(pos, node, stack, direction)
-				return minetest.get_meta(pos):get_inventory():add_item("main", stack)
-			end,
-			can_insert = function(pos, node, stack, direction)
-				return minetest.get_meta(pos):get_inventory():room_for_item("main", stack)
-			end,
-			input_inventory = "main",
-			connect_sides = {left = 1, right = 1, back = 1, front = 1, bottom = 1, top = 1}
-		},
+		--_____ Native methods required by internal1.lua for Tubelib2 _____--
+		tubelib2_on_update2 = function(pos, dir, tube, node) end,
+		tubelib2_on_update = function() end,
 
 		--_____ Native transfer methods required by TechAge pushers (unlocks 128 slots) _____--
 		on_inv_request = function(pos, in_dir, access_type)
@@ -303,7 +298,7 @@ for _, colour in ipairs(colors) do
 			"chest_side_" .. colour .. ".png", "chest_side_" .. colour .. ".png",
 			"chest_side_" .. colour .. ".png", "chest_lock_" .. colour .. ".png"
 		},
-		groups = {choppy = 2, oddly_breakable_by_hand = 2, tubed = 1, tubedevice = 1, tubedevice_receiver = 1, hopper_container = 1},
+		groups = {choppy = 2, oddly_breakable_by_hand = 2, tubed = 1, hopper_container = 1},
 		paramtype2 = "facedir",
 		on_place = minetest.rotate_node,
 		on_construct = function(pos)
@@ -328,10 +323,11 @@ for _, colour in ipairs(colors) do
 			remove_items = function(pos, node, stack, count)
 				return minetest.get_meta(pos):get_inventory():take_item("main", count)
 			end,
-			get_infotext = function(pos) return minetest.get_meta(pos):get_string("infotext") end
+			get_infotext = pipeworks_infotext
 		},
 
-		tube = def.tube,
+		tubelib2_on_update2 = def.tubelib2_on_update2,
+		tubelib2_on_update = def.tubelib2_on_update,
 
 		on_inv_request = def.on_inv_request,
 		on_push_item = function(pos, in_dir, stack)
@@ -376,40 +372,30 @@ for _, colour in ipairs(colors) do
 		end,
 	}
 	minetest.register_node("summer:locked_chest_" .. colour, def_lock)
+end
 --_____ Modern chests - snippet 3: final cache alignment and compatibility _____--
 
-	--_____ Register visual responses required by internal1.lua line 80 for Tubelib2 _____--
-	if minetest.get_modpath("tubelib2") then
-		local n1 = "summer:modern_chest_" .. colour
-		local n2 = "summer:locked_chest_" .. colour
-		minetest.registered_nodes[n1].tubelib2_on_update2 = function(pos, dir, tube, node) end
-		minetest.registered_nodes[n1].tubelib2_on_update = function() end
-		minetest.registered_nodes[n2].tubelib2_on_update2 = function(pos, dir, tube, node) end
-		minetest.registered_nodes[n2].tubelib2_on_update = function() end
-	end
-
-	--_____ Original compatibility alias (run inside the for loop) _____--
+for _, colour in ipairs(colors) do
 	minetest.register_alias("summer:chest" .. colour, "summer:modern_chest_" .. colour)
 	minetest.register_alias("summer:chest_lock" .. colour, "summer:locked_chest_" .. colour)
-end -- CHIUSURA STRUTTURALE DEL CICLO FOR GENERALE DEL FILE
+end
 
---_____ 1. Immediate Pipeworks mesh compatibility (run at file startup) _____--
+--_____ 1. Immediate Pipeworks mesh compatibility _____--
 if minetest.get_modpath("pipeworks") and pipeworks.register_tube_compatibility then
 	local pipe_nodes = {}
-	local colors_list = { "red", "orange", "yellow", "green", "blue", "violet", "black" }
-	for _, colour in ipairs(colors_list) do
+	for _, colour in ipairs(colors) do
 		table.insert(pipe_nodes, "summer:modern_chest_" .. colour)
 		table.insert(pipe_nodes, "summer:locked_chest_" .. colour)
 	end
 	pipeworks.register_tube_compatibility(pipe_nodes)
 end
 
---_____ 2. TechAge machine alignment injection (deferred until record indexing) _____--
+--_____ 2. TechAge pipe geometry alignment (run after modules load) _____--
 minetest.register_on_mods_loaded(function()
 	local ta_colors = { "red", "orange", "yellow", "green", "blue", "violet", "black" }
 
 	if techage then
-		--_____ Visual injection to bend black and blue tubes (ta4) toward colored chests _____--
+		--_____ Visual injection to bend black and blue tubes (ta4) toward chests _____--
 		if techage.Tube and techage.Tube.secondary_node_names then
 			for _, colour in ipairs(ta_colors) do
 				techage.Tube.secondary_node_names["summer:modern_chest_" .. colour] = true
@@ -417,37 +403,11 @@ minetest.register_on_mods_loaded(function()
 			end
 		end
 
-		--_____ Logic injection to make nodes valid for the pusher algorithm _____--
+		--_____ Logic injection to make nodes valid for the movement algorithm _____--
 		if techage.KnownNodes then
 			for _, colour in ipairs(ta_colors) do
 				techage.KnownNodes["summer:modern_chest_" .. colour] = true
 				techage.KnownNodes["summer:locked_chest_" .. colour] = true
-			end
-		end
-
-		--_____ Scan TechAge private module tables to add I/O indexing _____--
-		for key, value in pairs(techage) do
-			if type(value) == "table" then
-				if value["techage:chest_ta3"] ~= nil or key == "nodes" or key:match("node") or key:match("mach") then
-					for _, colour in ipairs(ta_colors) do
-						local n1 = "summer:modern_chest_" .. colour
-						local n2 = "summer:locked_chest_" .. colour
-
-						--_____ Correct structural definition with explicit brace closure _____--
-						value[n1] = {
-							on_inv_request = minetest.registered_nodes[n1].on_inv_request,
-							on_push_item = minetest.registered_nodes[n1].on_push_item,
-							on_pull_item = minetest.registered_nodes[n1].on_pull_item,
-							on_unpull_item = minetest.registered_nodes[n1].on_unpull_item,
-						}
-						value[n2] = {
-							on_inv_request = minetest.registered_nodes[n2].on_inv_request,
-							on_push_item = minetest.registered_nodes[n2].on_push_item,
-							on_pull_item = minetest.registered_nodes[n2].on_pull_item,
-							on_unpull_item = minetest.registered_nodes[n2].on_unpull_item,
-						}
-					end
-				end
 			end
 		end
 	end

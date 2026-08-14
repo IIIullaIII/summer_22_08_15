@@ -1,6 +1,8 @@
+local S = summer.S
+
 --[[
--- Modulo: Pallone con Glow, Trail, Suoni ed Effetti Speciali
--- File: init.lua
+--_____ Ball module with glow, trail, sounds and special effects _____--
+--_____ File: init.lua _____--
 
 local CALCIO = 0.1
 local IDLE_LIMIT = 5
@@ -38,7 +40,7 @@ local function reg_ball(color)
 			local node_def = minetest.registered_nodes[node.name]
 			local in_liquid = node_def and node_def.liquidtype ~= "none"
 
-			-- Galleggiamento costante
+			--_____ Constant floating _____--
 			if in_liquid then
 				self.float_phase = self.float_phase + dtime
 				local oscill = math.sin(self.float_phase * 4) * 1.5
@@ -57,7 +59,7 @@ local function reg_ball(color)
 					glow = 8
 				})
 
-				-- Ripristina movimento se colpita in acqua
+				--_____ Restore movement when hit in water _____--
 				local objs = minetest.get_objects_inside_radius(pos, 1.5)
 				for _, obj2 in ipairs(objs) do
 					if obj2:is_player() then
@@ -74,7 +76,7 @@ local function reg_ball(color)
 				return
 			end
 
-			-- Fisica a terra
+			--_____ Ground physics _____--
 			local acc = { x = 0, y = -10, z = 0 }
 			if not vector.equals(obj:get_acceleration(), acc) then
 				obj:set_acceleration(acc)
@@ -90,7 +92,7 @@ local function reg_ball(color)
 				obj:set_velocity(vel)
 			end
 
-			-- Stabilizzazione a terra (ma mantenere interattività)
+			--_____ Ground stabilization while keeping interaction _____--
 			if self.idle_time >= IDLE_LIMIT and not in_liquid then
 				if not self.stabilized then
 					obj:set_velocity({ x = 0, y = 0, z = 0 })
@@ -101,7 +103,7 @@ local function reg_ball(color)
 				self.stabilized = false
 			end
 
-			-- Rilevamento giocatori vicini
+			--_____ Nearby player detection _____--
 			local objs = minetest.get_objects_inside_radius(pos, 1.5)
 			local final_dir = { x=0, y=0, z=0 }
 			local player_count = 0
@@ -147,7 +149,7 @@ local function reg_ball(color)
 	})
 
 	minetest.register_craftitem(ball_item_name, {
-		description = "Summer Ball (" .. color .. ")",
+		description = S("Summer Ball") .. " (" .. color .. ")",
 		inventory_image = "summer_ball_" .. color .. "_inv.png",
 		on_place = function(itemstack, placer, pointed_thing)
 			local pos = pointed_thing.above
@@ -161,7 +163,7 @@ local function reg_ball(color)
 		end,
 	})
 
-	-- Craft
+	--_____ Crafts _____--
 	minetest.register_craft({
 		output = ball_item_name,
 		recipe = {
@@ -187,8 +189,8 @@ local colors = { "black", "red", "green", "blue", "yellow", "violet", "orange" }
 for _, color in ipairs(colors) do
 	reg_ball(color)
 end]]
--- Modulo: Pallone con Glow, Trail, Suoni ed Effetti Speciali + Bonus Fisica Avanzata
--- File: init.lua
+--_____ Ball module with glow, trail, sounds and advanced physics bonus _____--
+--_____ File: init.lua _____--
 
 local CALCIO = 0.1
 local IDLE_LIMIT = 5
@@ -331,7 +333,7 @@ local function reg_ball(color)
 	})
 
 	minetest.register_craftitem(ball_item_name, {
-		description = "Summer Ball (" .. color .. ")",
+		description = S("Summer Ball") .. " (" .. color .. ")",
 		inventory_image = "summer_ball_" .. color .. "_inv.png",
 		on_place = function(itemstack, placer, pointed_thing)
 			local pos = pointed_thing.above

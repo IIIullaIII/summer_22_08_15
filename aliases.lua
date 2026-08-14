@@ -1,3 +1,5 @@
+local S = summer.S
+
 
 local Ombrellone_n_list = {
 	{ "Red Ombrellone_n", "red"},
@@ -13,7 +15,10 @@ local Ombrellone_n_list = {
 for i in ipairs(Ombrellone_n_list) do
 	local Ombrellone_ndesc = Ombrellone_n_list[i][1]
 	local colour = Ombrellone_n_list[i][2]
-	
+
 minetest.register_alias_force("summer:Ombrellone_n_"..colour.."", "summer:ombrellone_n_"..colour.."")
 minetest.register_alias_force("summer:Ombrellone_n_"..colour.."_ch", "summer:ombrellone_n_"..colour.."_ch")
 end
+
+--_____ Compatibility: old grey granite ID _____--
+minetest.register_alias("summer:granite", "summer:graniteG")

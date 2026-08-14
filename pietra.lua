@@ -1,8 +1,10 @@
---ROCCIA
+local S = summer.S
+
+--_____ Rock _____--
 minetest.register_alias("desert_roccia_1","desert_roccia")
 minetest.register_alias("roccia_1","roccia")
 minetest.register_node("summer:roccia_1", {
-    description = "Roccia",
+    description = S("Grey Rock Fragments"),
     drawtype = "mesh",
     mesh = "roccia.obj",
 	tiles = {"roccia.png"},
@@ -17,17 +19,17 @@ minetest.register_node("summer:roccia_1", {
 	        fixed = { -0.5, -0.5,-0.5, 0.5,0.1, 0.5 },
 	    },
         	 on_place = function(itemstack, placer, pointed_thing)
-		-- place a random pebble node
+		--_____ Place a random rock fragment node _____--
 		local stack = ItemStack("summer:roccia_"..math.random(1,2))
 		local ret = minetest.item_place(stack, placer, pointed_thing)
 		return ItemStack("summer:roccia_1 "..itemstack:get_count()-(1-ret:get_count()))
 	end,--legacy_mineral = true,
 	sounds = default.node_sound_stone_defaults(),
-            
+
 })
 
 minetest.register_node("summer:desert_roccia_1", {
-    description = "Desert Roccia",
+    description = S("Desert Rock Fragments"),
     drawtype = "mesh",
     mesh = "roccia.obj",
 	tiles = {"desert_roccia.png"},
@@ -42,17 +44,17 @@ minetest.register_node("summer:desert_roccia_1", {
 	        fixed = { -0.5, -0.5,-0.5, 0.5,0.1, 0.5 },
 	    },
          on_place = function(itemstack, placer, pointed_thing)
-		-- place a random pebble node
+		--_____ Place a random rock fragment node _____--
 		local stack = ItemStack("summer:desert_roccia_"..math.random(1,2))
 		local ret = minetest.item_place(stack, placer, pointed_thing)
 		return ItemStack("summer:desert_roccia_1  "..itemstack:get_count()-(1-ret:get_count()))
 	end,
 	--legacy_mineral = true,
 	sounds = default.node_sound_stone_defaults(),
-            
+
 })
 minetest.register_node("summer:roccia_2", {
-    description = "Roccia",
+    description = S("Grey Rock Fragments"),
     drawtype = "mesh",
     mesh = "roccia.obj",
 	tiles = {"roccia.png"},
@@ -68,11 +70,11 @@ minetest.register_node("summer:roccia_2", {
 	    },
         	--legacy_mineral = true,
 	sounds = default.node_sound_stone_defaults(),
-            
+
 })
 
 minetest.register_node("summer:desert_roccia_2", {
-    description = "Desert Roccia",
+    description = S("Desert Rock Fragments"),
     drawtype = "mesh",
     mesh = "roccia.obj",
 	tiles = {"desert_roccia.png"},
@@ -88,14 +90,14 @@ minetest.register_node("summer:desert_roccia_2", {
 	    },
 	--legacy_mineral = true,
 	sounds = default.node_sound_stone_defaults(),
-            
+
 })
---MAPGEN
+--_____ Mapgen _____--
 minetest.register_on_generated(function(minp, maxp, seed)
 	if maxp.y >= 2 and minp.y <= 0 then
-		-- Generate roccias
+		--_____ Generate rocks _____--
 		local perlin1 = minetest.get_perlin(329, 3, 0.6, 100)
-		-- Assume X and Z lengths are equal
+		--_____ Assume X and Z lengths are equal _____--
 		local divlen = 32
 		local divs = (maxp.x-minp.x)/divlen+1;
 		for divx=0,divs-1 do
@@ -104,14 +106,14 @@ minetest.register_on_generated(function(minp, maxp, seed)
 			local z0 = minp.z + math.floor((divz+0)*divlen)
 			local x1 = minp.x + math.floor((divx+1)*divlen)
 			local z1 = minp.z + math.floor((divz+1)*divlen)
-			-- Determine roccia amount from perlin noise
+			--_____ Determine rock amount from Perlin noise _____--
 			local roccia_amount = math.floor(perlin1:get2d({x=x0, y=z0}) ^ 2 * 2)
-			-- Find random positions for roccias based on this random
+			--_____ Find random rock positions _____--
 			local pr = PseudoRandom(seed+1)
 			for i=0,roccia_amount do
 				local x = pr:next(x0, x1)
 				local z = pr:next(z0, z1)
-				-- Find ground level (0...15)
+				--_____ Find ground level (0...15) _____--
 				local ground_y = nil
 				for y=30,0,-1 do
 					if minetest.get_node({x=x,y=y,z=z}).name ~= "air" then
@@ -119,15 +121,15 @@ minetest.register_on_generated(function(minp, maxp, seed)
 						break
 					end
 				end
-				
+
 				if ground_y then
 					local p = {x=x,y=ground_y+1,z=z}
 					local nn = minetest.get_node(p).name
-					-- Check if the node can be replaced
+					--_____ Check if the node can be replaced _____--
 					if minetest.registered_nodes[nn] and
 						minetest.registered_nodes[nn].buildable_to then
 						nn = minetest.get_node({x=x,y=ground_y,z=z}).name
-						-- If desert sand, add dry shrub
+						--_____ If desert sand, add dry shrub _____--
 						if nn == "default:dirt_with_grass" then
 							minetest.set_node(p,{name="summer:roccia_"..pr:next(1,2), param2=math.random(0,3)})
 						elseif nn == "default:desert_sand" then
@@ -135,7 +137,7 @@ minetest.register_on_generated(function(minp, maxp, seed)
 					    end
 					end
 				end
-				
+
 			end
 		end
 		end
@@ -143,11 +145,7 @@ minetest.register_on_generated(function(minp, maxp, seed)
 end)
 
 
-    
-
-
-   
-    --craft PIETRA
+    --_____ Stone crafts _____--
         	minetest.register_craft({
 		output = '"summer:pietraA" 2',
 		recipe = {
@@ -164,27 +162,54 @@ end)
 			{ "summer:pietraA", "summer:desert_pietra", "" },
 		},
 	})
-    
-    
-    --craftitem PIETRA
+               	minetest.register_craft({
+		output = '"summer:pietraC" 2',
+		recipe = {
+			{ "", "", "" },
+			{ "", "", "" },
+			{ "summer:pietraA", "dye:cyan", "" },
+		},
+	})
+
+                minetest.register_craft({
+		output = '"summer:pietraB" 2',
+		recipe = {
+			{ "", "", "" },
+			{ "", "", "" },
+			{ "summer:pietraA", "dye:black", "" },
+		},
+	})
+
+    --_____ Stone craft item _____--
 minetest.register_craftitem("summer:desert_pietra", {
-	description = "Desert Pietra",
+	description = S("Desert Rock Fragments"),
 	inventory_image = "desert_pietra.png",
-	
+
 })
     minetest.register_craftitem("summer:pietraA", {
-	description = "pietraA",
+	description = S("Ivory Rock Fragments"),
 	inventory_image = "pietraA.png",
-	
+
 })
 minetest.register_craftitem("summer:pietra", {
-	description = "pietra",
+	description = S("Grey Rock Fragments"),
 	inventory_image = "pietra.png",
-	
+
+})
+    minetest.register_craftitem("summer:pietraC", {
+	description = S("Cyan Rock Fragments"),
+	inventory_image = "pietraC.png",
+
 })
     minetest.register_craftitem("summer:pietraP", {
-	description = "pietraP",
+	description = S("Pink Rock Fragments"),
 	inventory_image = "pietraP.png",
-	
+
 })
-   -- craftitem MATTONE
+    minetest.register_craftitem("summer:pietraB", {
+	description = S("Black Rock Fragments"),
+	inventory_image = "pietraB.png",
+
+})
+
+

@@ -1,3 +1,5 @@
+local S = summer.S
+
 local function is_water(pos)
 	local nn = minetest.get_node(pos).name
 	return minetest.get_item_group(nn, "water") ~= 0
@@ -28,9 +30,7 @@ local function reg_barca(color)
 	local barca_item_name = "summer:barca_"..color.."_item"
 	local barca_ent_name = "summer:barca_"..color.."_entity"
 
---
--- Boat entity
---
+--_____ Boat entity _____--
 
 local barca = {
 	physical = true,
@@ -109,7 +109,7 @@ function barca.on_punch(self, puncher)
 	end
 	if not self.driver then
 		self.removed = true
-		-- delay remove to ensure player is detached
+		--_____ delay remove to ensure player is detached _____--
 		minetest.after(0.1, function()
 			self.object:remove()
 		end)
@@ -216,7 +216,7 @@ minetest.register_entity("summer:barca_"..color.."", barca)
 
 
 minetest.register_craftitem(barca_item_name, {
-	description = "Barca ("..color..")",
+	description = S("Boat") .. " (" .. color .. ")",
 	inventory_image = "barca_"..color.."_inv.png",
 	wield_image = "barca_"..color.."_inv.png",
 	wield_scale = {x = 2, y = 2, z = 1},
@@ -256,7 +256,7 @@ minetest.register_craft({
 		{"group:wood", "wool:"..color, "group:wood"},
 		{"group:wood","group:wood","group:wood"},
 	},
-})	
+})
 end
 colors = {
 	"black", "red", "green", "blue", "yellow", "violet","orange",

@@ -1,3 +1,5 @@
+local S = summer.S
+
 local function is_water(pos)
 	local nn = minetest.get_node(pos).name
 	return minetest.get_item_group(nn, "water") ~= 0
@@ -28,9 +30,7 @@ local function reg_salvag(color)
 	local salvag_item_name = "summer:salvag_"..color.."_item"
 	local salvag_ent_name = "summer:salvag_"..color.."_entity"
 
---
--- Boat entity
---
+--_____ Boat entity _____--
 
 local salvag = {
 	physical = true,
@@ -57,7 +57,7 @@ function salvag.on_rightclick(self, clicker)
 		default.player_attached[name] = false
 		default.player_set_animation(clicker, "stand" , 30)
 		local pos = clicker:getpos()
-		pos = {x = pos.x, y = pos.y + 1, z = pos.z}		
+		pos = {x = pos.x, y = pos.y + 1, z = pos.z}
 		clicker:set_eye_offset({x = 0, y = 0.2, z = 0}, {x = 0, y = 0, z = 0})
 		minetest.after(0.1, function()
 			clicker:setpos(pos)
@@ -109,7 +109,7 @@ function salvag.on_punch(self, puncher)
 	end
 	if not self.driver then
 		self.removed = true
-		-- delay remove to ensure player is detached
+		--_____ delay remove to ensure player is detached _____--
 		minetest.after(0.1, function()
 			self.object:remove()
 		end)
@@ -216,7 +216,7 @@ minetest.register_entity("summer:salvag_"..color.."", salvag)
 
 
 minetest.register_craftitem(salvag_item_name, {
-	description = "salvagente ("..color..")",
+	description = S("Lifebuoy") .. " (" .. color .. ")",
 	inventory_image = "summer_salvag_"..color.."_inv.png",
 	wield_image = "summer_salvag_"..color.."_inv.png",
 	wield_scale = {x = 2, y = 2, z = 1},
@@ -245,7 +245,6 @@ minetest.register_craft({
 		{"default:paper", "group:leaves", "default:paper"},
 	},
 })
-
 
 
 if minetest.get_modpath("cannabis") then

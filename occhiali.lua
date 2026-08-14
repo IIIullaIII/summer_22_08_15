@@ -1,12 +1,14 @@
+local S = summer.S
+
 local Occhiali_list = {
-	{ "Red Occhiali", "red"},
-	{ "Orange Occhiali", "orange"},
-    { "Black Occhiali", "black"},
-	{ "Yellow Occhiali", "yellow"},
-	{ "Green Occhiali", "green"},
-	{ "Blue Occhiali", "blue"},
-    { "Jam Occhiali", "jam"},
-	{ "Violet Occhiali", "violet"},
+	{ S("Red Goggles"), "red"},
+	{ S("Orange Goggles"), "orange"},
+    { S("Black Goggles"), "black"},
+	{ S("Yellow Goggles"), "yellow"},
+	{ S("Green Goggles"), "green"},
+	{ S("Blue Goggles"), "blue"},
+    { S("Jam Goggles"), "jam"},
+	{ S("Violet Goggles"), "violet"},
 }
 
 for i in ipairs(Occhiali_list) do
@@ -16,7 +18,7 @@ minetest.register_alias("occhiali"..colour.."","summer:occhiali"..colour.."")
 if minetest.get_modpath("summer") then
 	local stats = {
 		Occhialidesc = { name=Occhialidesc, armor=1.8, heal=0, use=650 },
-        
+
 	}
 	--[[local mats = {
 		fibra="cannabis:fibra_ingot",
@@ -36,5 +38,5 @@ if minetest.get_modpath("summer") then
 end
 end
 
-	
+
 end

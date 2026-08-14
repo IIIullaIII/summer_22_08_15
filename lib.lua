@@ -1,9 +1,11 @@
--- summer/lib.lua
--- Libreria condivisa per oggetti galleggianti e altri effetti
+local S = summer.S
+
+--_____ summer/lib.lua _____--
+--_____ Shared library for floating objects and other effects _____--
 
 local summer_lib = {}
 
--- Rileva se un nodo è liquido
+--_____ Check whether a node is liquid _____--
 function summer_lib.is_liquid(pos)
 	local node = minetest.get_node_or_nil(pos)
 	if not node then return false end
@@ -11,7 +13,7 @@ function summer_lib.is_liquid(pos)
 	return def and def.liquidtype ~= "none"
 end
 
--- Calcola un impulso basato sulla direzione dello sguardo del giocatore
+--_____ Calculate an impulse based on the player look direction _____--
 function summer_lib.get_push_vector(player, multiplier)
 	if not player or not player:is_player() then return {x=0,y=0,z=0} end
 	local dir = player:get_look_dir()
@@ -19,13 +21,13 @@ function summer_lib.get_push_vector(player, multiplier)
 	return vector.multiply(dir, mul * multiplier)
 end
 
--- Applica un suono in base al tipo di superficie
+--_____ Play a sound based on the surface type _____--
 function summer_lib.play_surface_sound(pos, is_water)
 	local sound = is_water and "summer_ball_splash" or "summer_ball_kick"
 	minetest.sound_play(sound, { pos = pos, max_hear_distance = 10, gain = 1.0 })
 end
 
--- Particelle di trail
+--_____ Trail particles _____--
 function summer_lib.spawn_trail(pos)
 	minetest.add_particle({
 		pos = vector.add(pos, {x=0, y=0.3, z=0}),
@@ -37,7 +39,7 @@ function summer_lib.spawn_trail(pos)
 	})
 end
 
--- Particelle d'impatto
+--_____ Impact particles _____--
 function summer_lib.spawn_impact_particles(pos)
 	minetest.add_particlespawner({
 		amount = 10,
