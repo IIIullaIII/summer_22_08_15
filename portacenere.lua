@@ -63,7 +63,7 @@ minetest.register_node("summer:Portacenere_"..colour.."_ch", {
 	    },
 		groups = {snappy=2,cracky=3,oddly_breakable_by_hand=3, not_in_creative_inventory=1},
 		--sounds = default.node_sound_glass_defaults(),
-		drop = "summer:Portacenere_"..colour.."ch",
+		drop = "summer:Portacenere_"..colour.."_ch",
 		on_rightclick = function(pos, node, clicker)
 	        node.name = "summer:Portacenere_"..colour..""
 	        minetest.set_node(pos, node)
