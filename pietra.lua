@@ -179,7 +179,11 @@ end)
 			{ "summer:pietraA", "dye:black", "" },
 		},
 	})
+    minetest.register_craftitem("summer:pietraC", {
+	description = S("Cyan Rock Fragments"),
+	inventory_image = "pietraC.png",
 
+})
     --_____ Stone craft item _____--
 minetest.register_craftitem("summer:desert_pietra", {
 	description = S("Desert Rock Fragments"),
