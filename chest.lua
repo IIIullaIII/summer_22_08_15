@@ -6,9 +6,24 @@ local colors = { "red", "orange", "yellow", "green", "blue", "violet", "black" }
 
 local open_chests = {} -- Track open chests for close sound
 
-local function has_chest_privilege(meta, player)
+local function get_dir_vector(dir)
+	if type(dir) == "table" then return dir end
+	local dirs = {
+		{x=0, y=1, z=0},  -- 0
+		{x=0, y=-1, z=0}, -- 1
+		{x=0, y=0, z=-1}, -- 2
+		{x=0, y=0, z=1},  -- 3
+		{x=-1, y=0, z=0}, -- 4
+		{x=1, y=0, z=0},  -- 5
+	}
+	return dirs[dir + 1] or {x=0, y=0, z=0}
+end
+
+local function has_chest_privilege(meta, player, is_locked)
 	local owner = meta:get_string("owner")
-	return owner == "" or owner == player:get_player_name()
+	if not is_locked then return true end
+	if owner == "" then return false end
+	return owner == player:get_player_name()
 end
 
 local function sort_inventory(inv, method)
@@ -51,7 +66,6 @@ local function get_chest_formspec(pos, meta, confirm_clear)
 	local spos = pos.x .. "," .. pos.y .. "," .. pos.z
 
 	if confirm_clear then
-		--_____ Text split over 3 centered lines with explicit native red coloring _____--
 		local line1 = minetest.colorize("#FF0000", S("WARNING:")) .. "\n"
 		local line2 = S("Are you sure you want to clear the chest?") .. "\n"
 		local line3 = minetest.colorize("#FF0000", S("THIS WILL DELETE ALL ITEMS IN THE CHEST FOREVER"))
@@ -110,9 +124,13 @@ minetest.register_on_player_receive_fields(function(player, formname, fields)
 	if not pos then return end
 
 	local meta = minetest.get_meta(pos)
+	local node_name = minetest.get_node(pos).name
+	local is_locked = node_name:match("locked_chest")
+	
+	if not has_chest_privilege(meta, player, is_locked) then return end
+
 	local inv = meta:get_inventory()
 	if not inv then return end
-	if not has_chest_privilege(meta, player) then return end
 
 	local function play_button_sound()
 		minetest.sound_play("click", {
@@ -167,14 +185,34 @@ minetest.register_on_player_receive_fields(function(player, formname, fields)
 		close_chest_sound(player)
 	end
 end)
---_____ Modern chests - snippet 2: node registration with unified network compatibility _____--
 
-local function automation_allowed(pos, player_name)
-	local owner = minetest.get_meta(pos):get_string("owner")
-	return owner == "" or player_name == nil or player_name == "" or owner == player_name
+local function force_face_player_delayed(pos, placer)
+	if not placer or not placer:is_player() then return end
+
+	minetest.after(0.2, function()
+		local node = minetest.get_node(pos)
+		if not node or not node.name:match("chest") then return end
+
+		local player_pos = placer:get_pos()
+
+		-- La faccia frontale della chest deve essere rivolta verso il player.
+		-- Per questo modello usiamo la direzione dalla chest verso il player.
+		local dir = vector.subtract(pos, player_pos)
+
+		-- Ignora la differenza di altezza.
+		dir.y = 0
+
+		if vector.length(dir) < 0.001 then return end
+
+		local param2 = minetest.dir_to_facedir(dir)
+
+		minetest.swap_node(pos, {
+			name = node.name,
+			param2 = param2
+		})
+	end)
 end
 
---_____ Register nodes for each color _____--
 for _, colour in ipairs(colors) do
 	local def = {
 		description = S("Modern Chest") .. " (" .. colour .. ")",
@@ -183,20 +221,18 @@ for _, colour in ipairs(colors) do
 			"chest_side_" .. colour .. ".png", "chest_side_" .. colour .. ".png",
 			"chest_side_" .. colour .. ".png", "chest_front_" .. colour .. ".png"
 		},
-		-- Group merge: 'tubed=1' enables Pipeworks, while 'tubedevice=1' and 'tubedevice_receiver=1' enable Tubelib2/TechAge
 		groups = {choppy = 2, oddly_breakable_by_hand = 2, tubed = 1, tubedevice = 1, tubedevice_receiver = 1, hopper_container = 1},
 		paramtype2 = "facedir",
-		on_place = minetest.rotate_node,
+		on_place = minetest.item_place_node,
 		on_construct = function(pos)
 			local meta = minetest.get_meta(pos)
 			meta:set_string("infotext", S("Chest"))
 			meta:set_string("custom_name", S("Chest"))
-			local inv = meta:get_inventory()
-			inv:set_size("main", 16 * 8)
+			meta:get_inventory():set_size("main", 16 * 8)
 		end,
+		after_place_node = function(pos, placer)
+			force_face_player_delayed(pos, placer)
 
-		--_____ Automatic network ID initialization required by TechAge pipes for visual bends _____--
-		after_place_node = function(pos, placer, itemstack, pointed_thing)
 			if minetest.get_modpath("techage") and techage.add_node then
 				local meta = minetest.get_meta(pos)
 				local number = techage.add_node(pos, "techage:chest_ta3")
@@ -204,13 +240,8 @@ for _, colour in ipairs(colors) do
 				meta:set_string("infotext", S("Chest") .. " " .. number)
 			end
 		end,
-
 		on_rightclick = function(pos, node, clicker)
 			local meta = minetest.get_meta(pos)
-			if not has_chest_privilege(meta, clicker) then
-				minetest.chat_send_player(clicker:get_player_name(), S("This chest is locked."))
-				return
-			end
 			clicker:get_meta():set_string("modern_chest_pos", minetest.pos_to_string(pos))
 			minetest.show_formspec(clicker:get_player_name(), "summer:modern_chest_form", get_chest_formspec(pos, meta))
 			minetest.sound_play("chest_open", {
@@ -219,8 +250,7 @@ for _, colour in ipairs(colors) do
 				max_hear_distance = 8,
 			})
 			open_chests[clicker:get_player_name()] = {
-				pos = vector.copy(pos),
-				timer = 0
+				pos = {x = pos.x, y = pos.y, z = pos.z},
 			}
 		end,
 		on_destruct = function(pos)
@@ -236,45 +266,26 @@ for _, colour in ipairs(colors) do
 				max_hear_distance = 8,
 			})
 		end,
-
-		--_____ Native 6-sided Pipeworks structure _____--
 		pipeworks = {
 			connect_sides = {top = 1, bottom = 1, back = 1, left = 1, right = 1, front = 1},
-			insert_object = function(pos, node, stack, direction)
-				return minetest.get_meta(pos):get_inventory():add_item("main", stack)
-			end,
-			remove_items = function(pos, node, stack, count)
-				return minetest.get_meta(pos):get_inventory():take_item("main", count)
-			end,
+			insert_object = function(pos, node, stack) return minetest.get_meta(pos):get_inventory():add_item("main", stack) end,
+			remove_items = function(pos, node, stack, count) return minetest.get_meta(pos):get_inventory():take_item("main", count) end,
 			get_infotext = function(pos) return minetest.get_meta(pos):get_string("infotext") end
 		},
-
-		--_____ Native 6-sided tube structure required by older Pipeworks versions for compatibility _____--
 		tube = {
-			insert_object = function(pos, node, stack, direction)
-				return minetest.get_meta(pos):get_inventory():add_item("main", stack)
-			end,
-			can_insert = function(pos, node, stack, direction)
-				return minetest.get_meta(pos):get_inventory():room_for_item("main", stack)
-			end,
+			insert_object = function(pos, node, stack) return minetest.get_meta(pos):get_inventory():add_item("main", stack) end,
+			can_insert = function(pos, node, stack) return minetest.get_meta(pos):get_inventory():room_for_item("main", stack) end,
 			input_inventory = "main",
 			connect_sides = {left = 1, right = 1, back = 1, front = 1, bottom = 1, top = 1}
 		},
-
-		--_____ Native transfer methods required by TechAge pushers (unlocks 128 slots) _____--
-		on_inv_request = function(pos, in_dir, access_type)
-			local meta = minetest.get_meta(pos)
-			return meta:get_inventory(), "main"
-		end,
+		on_inv_request = function(pos) return minetest.get_meta(pos):get_inventory(), "main" end,
 		on_push_item = function(pos, in_dir, stack)
-			local meta = minetest.get_meta(pos)
-			local inv = meta:get_inventory()
+			local inv = minetest.get_meta(pos):get_inventory()
 			if inv then return inv:add_item("main", stack) end
 			return stack
 		end,
 		on_pull_item = function(pos, in_dir, num, item_name)
-			local meta = minetest.get_meta(pos)
-			local inv = meta:get_inventory()
+			local inv = minetest.get_meta(pos):get_inventory()
 			if inv then
 				for i = 1, inv:get_size("main") do
 					local stack = inv:get_stack("main", i)
@@ -288,8 +299,7 @@ for _, colour in ipairs(colors) do
 			return ItemStack("")
 		end,
 		on_unpull_item = function(pos, in_dir, stack)
-			local meta = minetest.get_meta(pos)
-			local inv = meta:get_inventory()
+			local inv = minetest.get_meta(pos):get_inventory()
 			if inv then return inv:add_item("main", stack) end
 			return stack
 		end,
@@ -305,148 +315,175 @@ for _, colour in ipairs(colors) do
 		},
 		groups = {choppy = 2, oddly_breakable_by_hand = 2, tubed = 1, tubedevice = 1, tubedevice_receiver = 1, hopper_container = 1},
 		paramtype2 = "facedir",
-		on_place = minetest.rotate_node,
+		on_place = minetest.item_place_node,
 		on_construct = function(pos)
 			local meta = minetest.get_meta(pos)
 			meta:set_string("owner", "")
 			meta:set_string("infotext", S("Locked Chest"))
 			meta:set_string("custom_name", S("Locked Chest"))
-			local inv = meta:get_inventory()
-			inv:set_size("main", 16 * 8)
+			meta:get_inventory():set_size("main", 16 * 8)
 		end,
-		on_rightclick = def.on_rightclick,
-		on_destruct = def.on_destruct,
+		on_rightclick = function(pos, node, clicker)
+			local meta = minetest.get_meta(pos)
+			local player_name = clicker:get_player_name()
+			local owner = meta:get_string("owner")
 
+			if owner == "" then
+				meta:set_string("owner", player_name)
+				meta:set_string("infotext", S("Locked Chest (Owned by @1)", player_name))
+				owner = player_name
+			end
+
+			if not has_chest_privilege(meta, clicker, true) then
+				minetest.chat_send_player(player_name, S("This chest is locked by @1", owner))
+				return
+			end
+
+			clicker:get_meta():set_string("modern_chest_pos", minetest.pos_to_string(pos))
+			minetest.show_formspec(player_name, "summer:modern_chest_form", get_chest_formspec(pos, meta))
+			minetest.sound_play("chest_open", {
+				pos = pos,
+				gain = 0.5,
+				max_hear_distance = 8,
+			})
+			open_chests[player_name] = {
+				pos = {x = pos.x, y = pos.y, z = pos.z},
+			}
+		end,
+		on_destruct = def.on_destruct,
 		pipeworks = {
 			connect_sides = {top = 1, bottom = 1, back = 1, left = 1, right = 1, front = 1},
-			insert_object = function(pos, node, stack, direction)
-				local tube_meta = minetest.get_meta(vector.add(pos, direction))
-				local owner = minetest.get_meta(pos):get_string("owner")
-				if owner ~= "" and tube_meta:get_string("owner") ~= owner then return stack end
-				return minetest.get_meta(pos):get_inventory():add_item("main", stack)
-			end,
+			insert_object = function(pos, node, stack) return minetest.get_meta(pos):get_inventory():add_item("main", stack) end,
 			remove_items = function(pos, node, stack, count)
-				return minetest.get_meta(pos):get_inventory():take_item("main", count)
+				local owner = minetest.get_meta(pos):get_string("owner")
+				if owner == "" then return minetest.get_meta(pos):get_inventory():take_item("main", count) end
+				
+				local px = pos.x or pos[1]
+				local py = pos.y or pos[2]
+				local pz = pos.z or pos[3]
+				if not px or not py or not pz then return ItemStack("") end
+
+				local dir_vec = get_dir_vector(node.direction)
+				local p1 = {x = px + dir_vec.x, y = py + dir_vec.y, z = pz + dir_vec.z}
+				local p2 = {x = px - dir_vec.x, y = py - dir_vec.y, z = pz - dir_vec.z}
+				
+				if minetest.get_node(p1).name:find("techage:") or minetest.get_node(p2).name:find("techage:") then
+					return minetest.get_meta(pos):get_inventory():take_item("main", count)
+				end
+				return ItemStack("")
 			end,
 			get_infotext = function(pos) return minetest.get_meta(pos):get_string("infotext") end
 		},
-
 		tube = def.tube,
-
 		on_inv_request = def.on_inv_request,
 		on_push_item = function(pos, in_dir, stack)
-			local meta = minetest.get_meta(pos)
-			local owner = meta:get_string("owner")
-			if owner ~= "" and not automation_allowed(pos, owner) then return stack end
-			local inv = meta:get_inventory()
+			local inv = minetest.get_meta(pos):get_inventory()
 			if inv then return inv:add_item("main", stack) end
 			return stack
 		end,
 		on_pull_item = function(pos, in_dir, num, item_name)
 			local meta = minetest.get_meta(pos)
 			local owner = meta:get_string("owner")
-			if owner ~= "" and not automation_allowed(pos, owner) then return ItemStack("") end
-			return def.on_pull_item(pos, in_dir, num, item_name)
+			if owner == "" then return def.on_pull_item(pos, in_dir, num, item_name) end
+
+			local inv = meta:get_inventory()
+			if not inv then return ItemStack("") end
+
+			if num and num > 0 then
+				local stack = ItemStack(item_name or "")
+				if stack:is_empty() then
+					for i = 1, inv:get_size("main") do
+						local s = inv:get_stack("main", i)
+						if not s:is_empty() then
+							local take = ItemStack(s:get_name())
+							take:set_count(math.min(num, s:get_count()))
+							return inv:remove_item("main", take)
+						end
+					end
+				else
+					return inv:remove_item("main", stack)
+				end
+			end
+
+			return ItemStack("")
 		end,
 		on_unpull_item = function(pos, in_dir, stack)
 			local meta = minetest.get_meta(pos)
 			local owner = meta:get_string("owner")
-			if owner ~= "" and not automation_allowed(pos, owner) then return stack end
-			local inv = meta:get_inventory()
-			if inv then return inv:add_item("main", stack) end
+			if owner == "" then return def.on_unpull_item(pos, in_dir, stack) end
+			
+			local px = pos.x or pos[1]
+			local py = pos.y or pos[2]
+			local pz = pos.z or pos[3]
+			if not px or not py or not pz then return stack end
+
+			local dir_vec = get_dir_vector(in_dir)
+			local p1 = {x = px + dir_vec.x, y = py + dir_vec.y, z = pz + dir_vec.z}
+			local p2 = {x = px - dir_vec.x, y = py - dir_vec.y, z = pz - dir_vec.z}
+			
+			if minetest.get_node(p1).name:find("techage:") or minetest.get_node(p2).name:find("techage:") then
+				return def.on_unpull_item(pos, in_dir, stack)
+			end
+			
 			return stack
 		end,
+		after_place_node = function(pos, placer)
+			force_face_player_delayed(pos, placer)
 
-		after_place_node = function(pos, placer, itemstack, pointed_thing)
 			if placer and placer:is_player() then
+				local name = placer:get_player_name()
 				local meta = minetest.get_meta(pos)
-				meta:set_string("owner", placer:get_player_name())
-
+				meta:set_string("owner", name)
+				meta:set_string("infotext", S("Locked Chest (Owned by @1)", name))
 				if minetest.get_modpath("techage") and techage.add_node then
 					local number = techage.add_node(pos, "techage:chest_ta3")
 					meta:set_string("node_number", number)
-					meta:set_string("infotext", S("Locked Chest (Owned by @1)", placer:get_player_name()) .. " " .. number)
-				else
-					meta:set_string("infotext", S("Locked Chest (Owned by @1)", placer:get_player_name()))
+					meta:set_string("infotext", S("Locked Chest (Owned by @1)", name) .. " " .. number)
 				end
-			end
-			if minetest.get_modpath("pipeworks") and pipeworks.scan_for_tube_objects then
-				pipeworks.scan_for_tube_objects(pos)
 			end
 		end,
 	}
 	minetest.register_node("summer:locked_chest_" .. colour, def_lock)
---_____ Modern chests - snippet 3: final cache alignment and compatibility _____--
 
-	--_____ Register visual responses required by internal1.lua line 80 for Tubelib2 _____--
 	if minetest.get_modpath("tubelib2") then
-		local n1 = "summer:modern_chest_" .. colour
-		local n2 = "summer:locked_chest_" .. colour
-		minetest.registered_nodes[n1].tubelib2_on_update2 = function(pos, dir, tube, node) end
+		local n1, n2 = "summer:modern_chest_" .. colour, "summer:locked_chest_" .. colour
+		minetest.registered_nodes[n1].tubelib2_on_update2 = function() end
 		minetest.registered_nodes[n1].tubelib2_on_update = function() end
-		minetest.registered_nodes[n2].tubelib2_on_update2 = function(pos, dir, tube, node) end
+		minetest.registered_nodes[n2].tubelib2_on_update2 = function() end
 		minetest.registered_nodes[n2].tubelib2_on_update = function() end
 	end
-
-	--_____ Original compatibility alias (run inside the for loop) _____--
 	minetest.register_alias("summer:chest" .. colour, "summer:modern_chest_" .. colour)
 	minetest.register_alias("summer:chest_lock" .. colour, "summer:locked_chest_" .. colour)
-end -- CHIUSURA STRUTTURALE DEL CICLO FOR GENERALE DEL FILE
+end
 
---_____ 1. Immediate Pipeworks mesh compatibility (run at file startup) _____--
 if minetest.get_modpath("pipeworks") and pipeworks.register_tube_compatibility then
 	local pipe_nodes = {}
-	local colors_list = { "red", "orange", "yellow", "green", "blue", "violet", "black" }
-	for _, colour in ipairs(colors_list) do
+	for _, colour in ipairs(colors) do
 		table.insert(pipe_nodes, "summer:modern_chest_" .. colour)
 		table.insert(pipe_nodes, "summer:locked_chest_" .. colour)
 	end
 	pipeworks.register_tube_compatibility(pipe_nodes)
 end
 
---_____ 2. TechAge machine alignment injection (deferred until record indexing) _____--
 minetest.register_on_mods_loaded(function()
-	local ta_colors = { "red", "orange", "yellow", "green", "blue", "violet", "black" }
-
 	if techage then
-		--_____ Visual injection to bend black and blue tubes (ta4) toward colored chests _____--
-		if techage.Tube and techage.Tube.secondary_node_names then
-			for _, colour in ipairs(ta_colors) do
-				techage.Tube.secondary_node_names["summer:modern_chest_" .. colour] = true
-				techage.Tube.secondary_node_names["summer:locked_chest_" .. colour] = true
+		for _, colour in ipairs(colors) do
+			local n1, n2 = "summer:modern_chest_" .. colour, "summer:locked_chest_" .. colour
+			if techage.Tube and techage.Tube.secondary_node_names then
+				techage.Tube.secondary_node_names[n1] = true
+				techage.Tube.secondary_node_names[n2] = true
+			end
+			if techage.KnownNodes then
+				techage.KnownNodes[n1] = true
+				techage.KnownNodes[n2] = true
 			end
 		end
-
-		--_____ Logic injection to make nodes valid for the pusher algorithm _____--
-		if techage.KnownNodes then
-			for _, colour in ipairs(ta_colors) do
-				techage.KnownNodes["summer:modern_chest_" .. colour] = true
-				techage.KnownNodes["summer:locked_chest_" .. colour] = true
-			end
-		end
-
-		--_____ Scan TechAge private module tables to add I/O indexing _____--
 		for key, value in pairs(techage) do
-			if type(value) == "table" then
-				if value["techage:chest_ta3"] ~= nil or key == "nodes" or key:match("node") or key:match("mach") then
-					for _, colour in ipairs(ta_colors) do
-						local n1 = "summer:modern_chest_" .. colour
-						local n2 = "summer:locked_chest_" .. colour
-
-						--_____ Correct structural definition with explicit brace closure _____--
-						value[n1] = {
-							on_inv_request = minetest.registered_nodes[n1].on_inv_request,
-							on_push_item = minetest.registered_nodes[n1].on_push_item,
-							on_pull_item = minetest.registered_nodes[n1].on_pull_item,
-							on_unpull_item = minetest.registered_nodes[n1].on_unpull_item,
-						}
-						value[n2] = {
-							on_inv_request = minetest.registered_nodes[n2].on_inv_request,
-							on_push_item = minetest.registered_nodes[n2].on_push_item,
-							on_pull_item = minetest.registered_nodes[n2].on_pull_item,
-							on_unpull_item = minetest.registered_nodes[n2].on_unpull_item,
-						}
-					end
+			if type(value) == "table" and (value["techage:chest_ta3"] ~= nil or key:match("node") or key:match("mach")) then
+				for _, colour in ipairs(colors) do
+					local n1, n2 = "summer:modern_chest_" .. colour, "summer:locked_chest_" .. colour
+					value[n1] = { on_inv_request = minetest.registered_nodes[n1].on_inv_request, on_push_item = minetest.registered_nodes[n1].on_push_item, on_pull_item = minetest.registered_nodes[n1].on_pull_item, on_unpull_item = minetest.registered_nodes[n1].on_unpull_item }
+					value[n2] = { on_inv_request = minetest.registered_nodes[n2].on_inv_request, on_push_item = minetest.registered_nodes[n2].on_push_item, on_pull_item = minetest.registered_nodes[n2].on_pull_item, on_unpull_item = minetest.registered_nodes[n2].on_unpull_item }
 				end
 			end
 		end
