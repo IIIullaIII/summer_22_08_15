@@ -61,6 +61,273 @@ local function sort_inventory(inv, method)
 	inv:set_list("main", full)
 end
 
+
+-- Move items between a player's inventory and the chest without losing leftovers.
+local function move_inventory_to_chest(player, chest_inv, only_if_present)
+	local player_inv = player:get_inventory()
+	if not player_inv then return end
+
+	local allowed = nil
+	if only_if_present then
+		allowed = {}
+		for i = 1, chest_inv:get_size("main") do
+			local stack = chest_inv:get_stack("main", i)
+			if not stack:is_empty() then
+				allowed[stack:get_name()] = true
+			end
+		end
+	end
+
+	for i = 1, player_inv:get_size("main") do
+		local stack = player_inv:get_stack("main", i)
+		if not stack:is_empty() and (not allowed or allowed[stack:get_name()]) then
+			local leftover = chest_inv:add_item("main", stack)
+			player_inv:set_stack("main", i, leftover)
+		end
+	end
+end
+
+local function move_chest_to_inventory(player, chest_inv, only_if_present)
+	local player_inv = player:get_inventory()
+	if not player_inv then return end
+
+	local allowed = nil
+	if only_if_present then
+		allowed = {}
+		for i = 1, player_inv:get_size("main") do
+			local stack = player_inv:get_stack("main", i)
+			if not stack:is_empty() then
+				allowed[stack:get_name()] = true
+			end
+		end
+	end
+
+	for i = 1, chest_inv:get_size("main") do
+		local stack = chest_inv:get_stack("main", i)
+		if not stack:is_empty() and (not allowed or allowed[stack:get_name()]) then
+			local leftover = player_inv:add_item("main", stack)
+			chest_inv:set_stack("main", i, leftover)
+		end
+	end
+end
+
+
+-- Two single-slot transfer filters. The upper slot sends every matching item
+-- from the player's inventory into the chest; the lower slot does the reverse.
+local FILTER_TO_CHEST = "filter_to_chest"
+local FILTER_TO_INV = "filter_to_inv"
+
+local function init_filter_lists(pos)
+	local inv = minetest.get_meta(pos):get_inventory()
+	if inv then
+		inv:set_size(FILTER_TO_CHEST, 1)
+		inv:set_size(FILTER_TO_INV, 1)
+	end
+end
+
+local function clear_filter(inv, listname)
+	inv:set_list(listname, {ItemStack("")})
+end
+
+local function filter_to_chest(pos, player, stack)
+	local meta = minetest.get_meta(pos)
+	local chest_inv = meta:get_inventory()
+	local player_inv = player and player:get_inventory()
+	if not chest_inv or not player_inv or stack:is_empty() then return end
+
+	local item_name = stack:get_name()
+	local leftover = chest_inv:add_item("main", stack)
+	if not leftover:is_empty() then
+		player_inv:add_item("main", leftover)
+	end
+
+	for i = 1, player_inv:get_size("main") do
+		local current = player_inv:get_stack("main", i)
+		if not current:is_empty() and current:get_name() == item_name then
+			local rest = chest_inv:add_item("main", current)
+			player_inv:set_stack("main", i, rest)
+		end
+	end
+end
+
+local function filter_to_inventory(pos, player, stack)
+	local meta = minetest.get_meta(pos)
+	local chest_inv = meta:get_inventory()
+	local player_inv = player and player:get_inventory()
+	if not chest_inv or not player_inv or stack:is_empty() then return end
+
+	local item_name = stack:get_name()
+
+	-- The selector may be dragged directly from the chest. Put it back into the
+	-- chest first, then transfer every matching stack to the player's inventory.
+	-- This also makes the selector work when the item does not already exist in
+	-- the player's inventory.
+	local selector_leftover = chest_inv:add_item("main", stack)
+	if not selector_leftover:is_empty() then
+		-- If the chest is unexpectedly full, keep the selector in the filter slot.
+		return
+	end
+
+	for i = 1, chest_inv:get_size("main") do
+		local current = chest_inv:get_stack("main", i)
+		if not current:is_empty() and current:get_name() == item_name then
+			local rest = player_inv:add_item("main", current)
+			chest_inv:set_stack("main", i, rest)
+			if not rest:is_empty() then
+				break
+			end
+		end
+	end
+end
+
+local function handle_filter_put(pos, listname, index, stack, player)
+	if not player or not player:is_player() then return end
+	if listname ~= FILTER_TO_CHEST and listname ~= FILTER_TO_INV then return end
+
+	local inv = minetest.get_meta(pos):get_inventory()
+	if not inv then return end
+
+	if listname == FILTER_TO_CHEST then
+		filter_to_chest(pos, player, stack)
+	else
+		filter_to_inventory(pos, player, stack)
+	end
+
+	clear_filter(inv, listname)
+	minetest.sound_play("click", {
+		to_player = player:get_player_name(),
+		gain = 0.5,
+	})
+end
+
+-- Dragging an item directly from the chest's main inventory into the lower
+-- filter is an inventory MOVE, not a PUT. Handle that case explicitly.
+local function handle_filter_move(pos, from_list, from_index, to_list, to_index, count, player)
+	if not player or not player:is_player() then return end
+	if to_list ~= FILTER_TO_CHEST and to_list ~= FILTER_TO_INV then return end
+
+	local inv = minetest.get_meta(pos):get_inventory()
+	if not inv then return end
+
+	local stack = inv:get_stack(to_list, to_index)
+	if stack:is_empty() then return end
+
+	if to_list == FILTER_TO_CHEST then
+		filter_to_chest(pos, player, stack)
+	else
+		filter_to_inventory(pos, player, stack)
+	end
+
+	clear_filter(inv, to_list)
+	minetest.sound_play("click", {
+		to_player = player:get_player_name(),
+		gain = 0.5,
+	})
+end
+
+local function preserve_chest_item(pos, oldnode, oldmeta, drops)
+	local inv = minetest.get_meta(pos):get_inventory()
+	if not inv then return end
+
+	local data = {
+		inventory = {},
+		fields = (oldmeta and oldmeta.fields) or {},
+	}
+	for i = 1, inv:get_size("main") do
+		data.inventory[i] = inv:get_stack("main", i):to_string()
+	end
+
+	for _, drop in ipairs(drops) do
+		if drop:get_name() == oldnode.name then
+			drop:get_meta():set_string("summer_chest_data", minetest.serialize(data))
+			return
+		end
+	end
+end
+
+local function restore_chest_item(pos, placer, itemstack)
+	local data_string = itemstack and itemstack:get_meta():get_string("summer_chest_data") or ""
+	if data_string == "" then return end
+
+	local data = minetest.deserialize(data_string)
+	if type(data) ~= "table" then return end
+
+	local meta = minetest.get_meta(pos)
+	if type(data.fields) == "table" then
+		for key, value in pairs(data.fields) do
+			meta:set_string(key, tostring(value))
+		end
+	end
+
+	local inv = meta:get_inventory()
+	init_filter_lists(pos)
+	if inv and type(data.inventory) == "table" then
+		inv:set_size("main", 16 * 8)
+		local stacks = {}
+		for i = 1, inv:get_size("main") do
+			local value = data.inventory[i]
+			stacks[i] = ItemStack(value or "")
+		end
+		inv:set_list("main", stacks)
+	end
+
+	itemstack:get_meta():set_string("summer_chest_data", "")
+end
+
+
+-- When the player right-clicks an existing interactive node while holding a chest,
+-- let that node handle the click first. Sneaking deliberately bypasses this so the
+-- chest can be placed next to/against the pointed node, matching Luanti behavior.
+local function place_chest_with_rightclick_priority(itemstack, placer, pointed_thing)
+	if pointed_thing and pointed_thing.type == "node" and placer and placer:is_player() then
+		local controls = placer:get_player_control()
+		if not controls.sneak then
+			local pos = pointed_thing.under
+			local node = minetest.get_node(pos)
+			local node_def = minetest.registered_nodes[node.name]
+			if node_def and node_def.on_rightclick then
+				return node_def.on_rightclick(pos, node, placer, itemstack, pointed_thing) or itemstack
+			end
+		end
+	end
+
+	return minetest.item_place_node(itemstack, placer, pointed_thing)
+end
+
+
+local function get_chest_palette(pos)
+	local node_name = minetest.get_node(pos).name or ""
+	local colour = node_name:match("chest_([^_]+)$") or "black"
+	local palette = {
+		red = {"#5A171799", "#8A2A2ACC", "#B83A3AFF", "#6E2020FF"},
+		orange = {"#6B341799", "#A95624CC", "#D87935FF", "#82401FFF"},
+		yellow = {"#665A1499", "#9C8D20CC", "#D0BF35FF", "#756B18FF"},
+		green = {"#1C5A2B99", "#2C8442CC", "#3FB85BFF", "#246A35FF"},
+		blue = {"#173D6B99", "#285E9ECC", "#3A83D0FF", "#20527FFF"},
+		violet = {"#48206499", "#6D3494CC", "#9348C7FF", "#5A2A78FF"},
+		black = {"#30303099", "#4A4A4ACC", "#666666FF", "#3A3A3AFF"},
+	}
+	return palette[colour] or palette.black
+end
+
+local function get_chest_listcolors(pos)
+	local c = get_chest_palette(pos)
+	return "listcolors[" .. c[1] .. ";" .. c[2] .. ";" .. c[3] .. ";" .. c[4] .. ";#FFF]"
+end
+
+local function get_chest_slot_frames(pos)
+	local color = get_chest_palette(pos)[4]:sub(1, 7)
+	local frames = {}
+	for row = 0, 7 do
+		for col = 0, 15 do
+			local x = 0.94 + (col * 1.25)
+			local y = 2.94 + (row * 1.25)
+			table.insert(frames, "image[" .. x .. "," .. y .. ";1.12,1.12;gui_hb_bg.png^[colorize:" .. color .. ":100]")
+		end
+	end
+	return table.concat(frames)
+end
+
 local function get_chest_formspec(pos, meta, confirm_clear)
 	local name = meta:get_string("custom_name") or S("Chest")
 	local spos = pos.x .. "," .. pos.y .. "," .. pos.z
@@ -88,17 +355,41 @@ local function get_chest_formspec(pos, meta, confirm_clear)
 		"label[1.1,1.5;" .. minetest.colorize("#FFFF00", name) .. "]" ..
 		"field[4.5,1.0;6,1;rename;" .. S("New name") .. ";]" ..
 		"button[10.7,1.0;2,1;setname;" .. S("Rename") .. "]" ..
-		"button[13.9,0.5;2,1;clear_all;" .. minetest.colorize("#FF0000", S("CLEAR")) .. "]" ..
-		"button[16.1,0.5;2,1;sort_name;" .. S("Sort Name") .. "]" ..
-		"button[18.3,0.5;2,1;sort_item;" .. S("Sort Item") .. "]" ..
-		"button[16.1,1.7;2,1;sort_stack;" .. S("Sort Stack") .. "]" ..
-		"button[18.3,1.7;2,1;sort_mod;" .. S("Sort Mod") .. "]" ..
+		"button[13.4,0.5;1.9,1;clear_all;" .. minetest.colorize("#FF0000", S("CLEAR")) .. "]" ..
+		"button[15.6,0.5;2.2,1;sort_name;" .. S("Sort Name") .. "]" ..
+		"button[18.0,0.5;2.2,1;sort_item;" .. S("Sort Item") .. "]" ..
+		"button[15.6,1.7;2.2,1;sort_stack;" .. S("Sort Stack") .. "]" ..
+		"button[18.0,1.7;2.2,1;sort_mod;" .. S("Sort Mod") .. "]" ..
+		-- Transfer controls: bottom-right area, outside the player's inventory.
+		"button[14.0,13.6;6.3,1;inv_to_chest;" .. S("Inv -> Chest") .. "]" ..
+		"button[14.0,14.8;6.3,1;chest_to_inv;" .. S("Chest -> Inv") .. "]" ..
+		"button[14.0,16.0;6.3,1;inv_to_chest_present;" .. S("Only present ->") .. "]" ..
+		"button[14.0,17.2;6.3,1;chest_to_inv_present;" .. S("<- Only present") .. "]" ..
+		get_chest_slot_frames(pos) ..
+		get_chest_listcolors(pos) ..
 		"list[nodemeta:" .. spos .. ";main;1.0,3.0;16,8;]" ..
+		-- Single-slot transfer filters on the lower-left, with labels underneath.
+		"image[0.70,13.40;1.40,1.40;gui_hb_bg.png^[colorize:" .. get_chest_palette(pos)[4]:sub(1, 7) .. ":90]" ..
+		"list[nodemeta:" .. spos .. ";filter_to_chest;0.90,13.60;1,1;]" ..
+		"label[0.72,15.12;" .. S("All -> Chest") .. "]" ..
+		"image[0.70,15.55;1.40,1.40;gui_hb_bg.png]" ..
+		"list[nodemeta:" .. spos .. ";filter_to_inv;0.90,15.75;1,1;]" ..
+		"label[0.72,17.28;" .. S("All -> Inv") .. "]" ..
+		-- Restore the normal player-inventory slot colors after the chest lists.
+		"listcolors[#00000069;#5A5A5A;#141318;#30434C;#FFF]" ..
 		"list[current_player;main;3.0,13.8;8,1;]" ..
 		"list[current_player;main;3.0,15.0;8,3;8]" ..
 		"listring[nodemeta:" .. spos .. ";main]" ..
 		"listring[current_player;main]" ..
-		default.get_hotbar_bg(3.0,14.8)
+		-- Hotbar background aligned with the 1.25-slot spacing used by formspec inventory lists.
+		"image[3.0,13.8;1,1;gui_hb_bg.png]" ..
+		"image[4.25,13.8;1,1;gui_hb_bg.png]" ..
+		"image[5.5,13.8;1,1;gui_hb_bg.png]" ..
+		"image[6.75,13.8;1,1;gui_hb_bg.png]" ..
+		"image[8.0,13.8;1,1;gui_hb_bg.png]" ..
+		"image[9.25,13.8;1,1;gui_hb_bg.png]" ..
+		"image[10.5,13.8;1,1;gui_hb_bg.png]" ..
+		"image[11.75,13.8;1,1;gui_hb_bg.png]"
 end
 
 local function close_chest_sound(player)
@@ -141,8 +432,44 @@ minetest.register_on_player_receive_fields(function(player, formname, fields)
 
 	if fields.setname and fields.rename and fields.rename ~= "" then
 		meta:set_string("custom_name", fields.rename)
+		local node_number = meta:get_string("node_number")
+		local owner = meta:get_string("owner")
+		local infotext = fields.rename
+		if owner ~= "" then
+			infotext = infotext .. " " .. S("(Owned by @1)", owner)
+		end
+		if node_number ~= "" then infotext = infotext .. " " .. node_number end
+		meta:set_string("infotext", infotext)
 		minetest.chat_send_player(player:get_player_name(), S("Chest renamed."))
 		play_button_sound()
+	end
+
+	if fields.inv_to_chest then
+		move_inventory_to_chest(player, inv, false)
+		play_button_sound()
+		minetest.show_formspec(player:get_player_name(), "summer:modern_chest_form", get_chest_formspec(pos, meta))
+		return
+	end
+
+	if fields.chest_to_inv then
+		move_chest_to_inventory(player, inv, false)
+		play_button_sound()
+		minetest.show_formspec(player:get_player_name(), "summer:modern_chest_form", get_chest_formspec(pos, meta))
+		return
+	end
+
+	if fields.inv_to_chest_present then
+		move_inventory_to_chest(player, inv, true)
+		play_button_sound()
+		minetest.show_formspec(player:get_player_name(), "summer:modern_chest_form", get_chest_formspec(pos, meta))
+		return
+	end
+
+	if fields.chest_to_inv_present then
+		move_chest_to_inventory(player, inv, true)
+		play_button_sound()
+		minetest.show_formspec(player:get_player_name(), "summer:modern_chest_form", get_chest_formspec(pos, meta))
+		return
 	end
 
 	if fields.clear_all then
@@ -223,21 +550,23 @@ for _, colour in ipairs(colors) do
 		},
 		groups = {choppy = 2, oddly_breakable_by_hand = 2, tubed = 1, tubedevice = 1, tubedevice_receiver = 1, hopper_container = 1},
 		paramtype2 = "facedir",
-		on_place = minetest.item_place_node,
+		on_place = place_chest_with_rightclick_priority,
 		on_construct = function(pos)
 			local meta = minetest.get_meta(pos)
 			meta:set_string("infotext", S("Chest"))
 			meta:set_string("custom_name", S("Chest"))
 			meta:get_inventory():set_size("main", 16 * 8)
+			init_filter_lists(pos)
 		end,
-		after_place_node = function(pos, placer)
+		after_place_node = function(pos, placer, itemstack)
+			restore_chest_item(pos, placer, itemstack)
 			force_face_player_delayed(pos, placer)
 
 			if minetest.get_modpath("techage") and techage.add_node then
 				local meta = minetest.get_meta(pos)
 				local number = techage.add_node(pos, "techage:chest_ta3")
 				meta:set_string("node_number", number)
-				meta:set_string("infotext", S("Chest") .. " " .. number)
+				meta:set_string("infotext", meta:get_string("custom_name") .. " " .. number)
 			end
 		end,
 		on_rightclick = function(pos, node, clicker)
@@ -253,6 +582,7 @@ for _, colour in ipairs(colors) do
 				pos = {x = pos.x, y = pos.y, z = pos.z},
 			}
 		end,
+		preserve_metadata = preserve_chest_item,
 		on_destruct = function(pos)
 			if minetest.get_modpath("techage") then
 				local node = minetest.get_node(pos)
@@ -266,6 +596,8 @@ for _, colour in ipairs(colors) do
 				max_hear_distance = 8,
 			})
 		end,
+		on_metadata_inventory_put = handle_filter_put,
+		on_metadata_inventory_move = handle_filter_move,
 		pipeworks = {
 			connect_sides = {top = 1, bottom = 1, back = 1, left = 1, right = 1, front = 1},
 			insert_object = function(pos, node, stack) return minetest.get_meta(pos):get_inventory():add_item("main", stack) end,
@@ -315,13 +647,14 @@ for _, colour in ipairs(colors) do
 		},
 		groups = {choppy = 2, oddly_breakable_by_hand = 2, tubed = 1, tubedevice = 1, tubedevice_receiver = 1, hopper_container = 1},
 		paramtype2 = "facedir",
-		on_place = minetest.item_place_node,
+		on_place = place_chest_with_rightclick_priority,
 		on_construct = function(pos)
 			local meta = minetest.get_meta(pos)
 			meta:set_string("owner", "")
 			meta:set_string("infotext", S("Locked Chest"))
 			meta:set_string("custom_name", S("Locked Chest"))
 			meta:get_inventory():set_size("main", 16 * 8)
+			init_filter_lists(pos)
 		end,
 		on_rightclick = function(pos, node, clicker)
 			local meta = minetest.get_meta(pos)
@@ -350,7 +683,10 @@ for _, colour in ipairs(colors) do
 				pos = {x = pos.x, y = pos.y, z = pos.z},
 			}
 		end,
+		preserve_metadata = preserve_chest_item,
 		on_destruct = def.on_destruct,
+		on_metadata_inventory_put = handle_filter_put,
+		on_metadata_inventory_move = handle_filter_move,
 		pipeworks = {
 			connect_sides = {top = 1, bottom = 1, back = 1, left = 1, right = 1, front = 1},
 			insert_object = function(pos, node, stack) return minetest.get_meta(pos):get_inventory():add_item("main", stack) end,
@@ -427,19 +763,28 @@ for _, colour in ipairs(colors) do
 			
 			return stack
 		end,
-		after_place_node = function(pos, placer)
+		after_place_node = function(pos, placer, itemstack)
+			restore_chest_item(pos, placer, itemstack)
 			force_face_player_delayed(pos, placer)
 
 			if placer and placer:is_player() then
 				local name = placer:get_player_name()
 				local meta = minetest.get_meta(pos)
-				meta:set_string("owner", name)
-				meta:set_string("infotext", S("Locked Chest (Owned by @1)", name))
+				if meta:get_string("owner") == "" then
+					meta:set_string("owner", name)
+				end
 				if minetest.get_modpath("techage") and techage.add_node then
 					local number = techage.add_node(pos, "techage:chest_ta3")
 					meta:set_string("node_number", number)
-					meta:set_string("infotext", S("Locked Chest (Owned by @1)", name) .. " " .. number)
 				end
+				local owner = meta:get_string("owner")
+				local infotext = meta:get_string("custom_name")
+				if owner ~= "" then
+					infotext = infotext .. " " .. S("(Owned by @1)", owner)
+				end
+				local number = meta:get_string("node_number")
+				if number ~= "" then infotext = infotext .. " " .. number end
+				meta:set_string("infotext", infotext)
 			end
 		end,
 	}
