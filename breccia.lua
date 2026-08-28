@@ -49,7 +49,7 @@ minetest.register_node("summer:brecciaC", {
 	tiles = {"brecciaC.png"},
 	groups = {crumbly = 2, falling_node = 1},
     --groups = {cracky = 3, stone = 1},
-	drop = '"summer:pietra" 9',
+	drop = '"summer:pietraC" 9',
 	--legacy_mineral = true,
 	is_ground_content = true, --
     sounds = default.node_sound_gravel_defaults(),
