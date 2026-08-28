@@ -1,227 +1,239 @@
+
 local S = summer.S
 
-if minetest.get_modpath("wool") and minetest.get_modpath("dye") then
+if not minetest.get_modpath("wool") or not minetest.get_modpath("dye") then
+	return
+end
 
---_____ Rake _____--
-minetest.register_craft({
-    output = "summer:rake",
-    recipe = {
-        {"default:stick", "default:steel_ingot", "default:stick"},
-        {"", "default:stick", ""},
-        {"", "default:gold_ingot", ""}
-    }
+
+
+-- Helper functions
+
+
+local function register_craft(output, recipe)
+	minetest.register_craft({
+		output = output,
+		recipe = recipe,
+	})
+end
+
+local function full_recipe(item)
+	return {
+		{item, item, item},
+		{item, item, item},
+		{item, item, item},
+	}
+end
+
+local function register_full_craft(output, count, item)
+	register_craft(output .. " " .. count, full_recipe(item))
+end
+
+
+
+-- Rake
+
+
+register_craft("summer:rake", {
+	{"default:stick", "default:steel_ingot", "default:stick"},
+	{"", "default:stick", ""},
+	{"", "default:gold_ingot", ""},
 })
 
---_____ Breccia _____--
-minetest.register_craft({
-    output = "summer:breccia 4",
-    recipe = {
-        {"summer:pietra", "summer:pietra", "summer:pietra"},
-        {"summer:pietra", "summer:pietra", "summer:pietra"},
-        {"summer:pietra", "summer:pietra", "summer:pietra"},
-    },
+
+
+-- Breccia
+
+
+register_full_craft(
+	"summer:breccia",
+	4,
+	"summer:pietra"
+)
+
+register_full_craft(
+	"summer:brecciaC",
+	4,
+	"summer:pietraC"
+)
+
+register_full_craft(
+	"summer:desert_breccia_2",
+	4,
+	"summer:desert_pietra"
+)
+
+register_full_craft(
+	"summer:breccia_2",
+	4,
+	"summer:pietraA"
+)
+
+register_full_craft(
+	"summer:desert_breccia",
+	4,
+	"summer:pietraP"
+)
+
+
+
+-- Granite
+
+
+register_craft("summer:graniteBC 5", {
+	{"", "", ""},
+	{"summer:pietraA", "", ""},
+	{"summer:graniteB", "", ""},
 })
 
-minetest.register_craft({
-    output = "summer:brecciaC 4",
-    recipe = {
-        {"summer:pietraC", "summer:pietraC", "summer:pietraC"},
-        {"summer:pietraC", "summer:pietraC", "summer:pietraC"},
-        {"summer:pietraC", "summer:pietraC", "summer:pietraC"},
-    },
+register_craft("summer:graniteB 5", {
+	{"", "", ""},
+	{"summer:graniteP", "summer:graniteA", ""},
+	{"summer:graniteR", "summer:graniteG", ""},
 })
 
-minetest.register_craft({
-    output = "summer:desert_breccia_2 4",
-    recipe = {
-        {"summer:desert_pietra", "summer:desert_pietra", "summer:desert_pietra"},
-        {"summer:desert_pietra", "summer:desert_pietra", "summer:desert_pietra"},
-        {"summer:desert_pietra", "summer:desert_pietra", "summer:desert_pietra"},
-    },
-})
+register_full_craft(
+	"summer:graniteR",
+	5,
+	"summer:mattoneR"
+)
 
-minetest.register_craft({
-    output = "summer:breccia_2 4",
-    recipe = {
-        {"summer:pietraA", "summer:pietraA", "summer:pietraA"},
-        {"summer:pietraA", "summer:pietraA", "summer:pietraA"},
-        {"summer:pietraA", "summer:pietraA", "summer:pietraA"},
-    },
-})
+register_full_craft(
+	"summer:graniteC",
+	5,
+	"summer:mattoneC"
+)
 
-minetest.register_craft({
-    output = "summer:desert_breccia 4",
-    recipe = {
-        {"summer:pietraP", "summer:pietraP", "summer:pietraP"},
-        {"summer:pietraP", "summer:pietraP", "summer:pietraP"},
-        {"summer:pietraP", "summer:pietraP", "summer:pietraP"},
-    },
-})
+register_full_craft(
+	"summer:graniteA",
+	5,
+	"summer:mattoneA"
+)
 
---_____ Granite _____--
-minetest.register_craft({
-    output = "summer:graniteBC 5",
-    recipe = {
-        {"", "", ""},
-        {"summer:pietraA", "", ""},
-        {"summer:graniteB", "", ""},
-    },
-})
+register_full_craft(
+	"summer:graniteG",
+	5,
+	"summer:mattoneG"
+)
 
-minetest.register_craft({
-    output = "summer:graniteB 5",
-    recipe = {
-        {"", "", ""},
-        {"summer:graniteP", "summer:graniteA", ""},
-        {"summer:graniteR", "summer:graniteG", ""},
-    },
-})
+register_full_craft(
+	"summer:graniteP",
+	5,
+	"summer:mattoneP"
+)
 
-minetest.register_craft({
-    output = "summer:graniteR 5",
-    recipe = {
-        {"summer:mattoneR", "summer:mattoneR", "summer:mattoneR"},
-        {"summer:mattoneR", "summer:mattoneR", "summer:mattoneR"},
-        {"summer:mattoneR", "summer:mattoneR", "summer:mattoneR"},
-    },
-})
 
-minetest.register_craft({
-    output = "summer:graniteC 5",
-    recipe = {
-        {"summer:mattoneC", "summer:mattoneC", "summer:mattoneC"},
-        {"summer:mattoneC", "summer:mattoneC", "summer:mattoneC"},
-        {"summer:mattoneC", "summer:mattoneC", "summer:mattoneC"},
-    },
-})
 
-minetest.register_craft({
-    output = "summer:graniteA 5",
-    recipe = {
-        {"summer:mattoneA", "summer:mattoneA", "summer:mattoneA"},
-        {"summer:mattoneA", "summer:mattoneA", "summer:mattoneA"},
-        {"summer:mattoneA", "summer:mattoneA", "summer:mattoneA"},
-    },
-})
+-- Coloured items
 
-minetest.register_craft({
-    output = "summer:graniteG 5",
-    recipe = {
-        {"summer:mattoneG", "summer:mattoneG", "summer:mattoneG"},
-        {"summer:mattoneG", "summer:mattoneG", "summer:mattoneG"},
-        {"summer:mattoneG", "summer:mattoneG", "summer:mattoneG"},
-    },
-})
 
-minetest.register_craft({
-    output = "summer:graniteP 5",
-    recipe = {
-        {"summer:mattoneP", "summer:mattoneP", "summer:mattoneP"},
-        {"summer:mattoneP", "summer:mattoneP", "summer:mattoneP"},
-        {"summer:mattoneP", "summer:mattoneP", "summer:mattoneP"},
-    },
-})
-
-local lchest_list = {
-    {S("Red Chest"), "red"},
-    {S("Orange Chest"), "orange"},
-    {S("Black Chest"), "black"},
-    {S("Yellow Chest"), "yellow"},
-    {S("Green Chest"), "green"},
-    {S("Blue Chest"), "blue"},
-    {S("Violet Chest"), "violet"},
-    {S("White Chest"), "white"}
+local colours = {
+	"red",
+	"orange",
+	"black",
+	"yellow",
+	"green",
+	"blue",
+	"violet",
+	"white",
 }
 
-for i in ipairs(lchest_list) do
-    local desc = lchest_list[i][1]
-    local colour = lchest_list[i][2]
 
-    --_____ Deck chair _____--
-    minetest.register_craft({
-        output = "summer:sdraia_" .. colour,
-        recipe = {
-            {"default:stick", "wool:" .. colour, ""},
-            {"default:paper", "default:paper", "default:paper"},
-            {"default:stick", "", "default:stick"}
-        }
-    })
+for _, colour in ipairs(colours) do
 
-    --_____ Ashtray _____--
-    minetest.register_craft({
-        output = "summer:Portacenere_" .. colour,
-        recipe = {
-            {"group:wood", "", "group:wood"},
-            {"default:stick", "default:paper", "default:stick"},
-            {"default:paper", "wool:" .. colour, "default:paper"}
-        }
-    })
+	local wool = "wool:" .. colour
+	local dye = "dye:" .. colour
 
-    --_____ Door _____--
-    minetest.register_craft({
-        output = "summer:porta_" .. colour .. "_ch",
-        recipe = {
-            {"group:wood", "wool:" .. colour, ""},
-            {"wool:" .. colour, "group:wood", ""},
-            {"group:wood", "group:wood", ""}
-        }
-    })
 
-    --_____ Goggles _____--
-    minetest.register_craft({
-        output = "summer:occhiali_" .. colour,
-        recipe = {
-            {"", "wool:" .. colour, ""},
-            {"default:stick", "", "default:stick"},
-            {"default:glass", "default:stick", "default:glass"}
-        }
-    })
+	
+	-- Deck chair
+	
 
-    --_____ Towel _____--
-    minetest.register_craft({
-        output = "summer:asciugamano_" .. colour,
-        recipe = {
-            {"", "", ""},
-            {"wool:" .. colour, "", ""},
-            {"default:ladder_wood", "default:ladder_wood", "default:ladder_wood"}
-        }
-    })
+	register_craft("summer:sdraia_" .. colour, {
+		{"default:stick", wool, ""},
+		{"default:paper", "default:paper", "default:paper"},
+		{"default:stick", "", "default:stick"},
+	})
 
-    --_____ Beach umbrella _____--
-    minetest.register_craft({
-        output = "summer:ombrellone_" .. colour,
-        recipe = {
-            {"default:paper", "wool:" .. colour, "default:paper"},
-            {"", "default:stick", ""},
-            {"", "default:stick", ""}
-        }
-    })
 
-    minetest.register_craft({
-        output = "summer:ombrellone_n_" .. colour,
-        recipe = {
-            {"", "wool:" .. colour, ""},
-            {"default:paper", "default:stick", "default:paper"},
-            {"", "default:stick", ""}
-        }
-    })
+	
+	-- Ashtray
+	
 
-    --_____ Chest _____--
-    minetest.register_craft({
-        output = "summer:chest" .. colour,
-        recipe = {
-            {"default:stone", "dye:" .. colour, "default:stone"},
-            {"group:wood", "", "group:wood"},
-            {"group:wood", "group:wood", "group:wood"}
-        }
-    })
+	register_craft("summer:Portacenere_" .. colour, {
+		{"group:wood", "", "group:wood"},
+		{"default:stick", "default:paper", "default:stick"},
+		{"default:paper", wool, "default:paper"},
+	})
 
-    minetest.register_craft({
-        output = "summer:chest_lock" .. colour,
-        recipe = {
-            {"summer:chest" .. colour, "default:diamond", ""}
-        }
-    })
-end
+
+
+	
+
+	register_craft("summer:porta_" .. colour, {
+		{"group:wood", wool, ""},
+		{wool, "group:wood", ""},
+		{"group:wood", "group:wood", ""},
+	})
+
+
+	
+	-- Goggles
+	
+
+	register_craft("summer:occhiali_" .. colour, {
+		{"", wool, ""},
+		{"default:stick", "", "default:stick"},
+		{"default:glass", "default:stick", "default:glass"},
+	})
+
+
+	
+	-- Towel
+	
+
+	register_craft("summer:asciugamano_" .. colour, {
+		{"", "", ""},
+		{wool, "", ""},
+		{
+			"default:ladder_wood",
+			"default:ladder_wood",
+			"default:ladder_wood"
+		},
+	})
+
+
+	
+	-- Beach umbrella
+	
+
+	register_craft("summer:ombrellone_" .. colour, {
+		{"default:paper", wool, "default:paper"},
+		{"", "default:stick", ""},
+		{"", "default:stick", ""},
+	})
+
+	register_craft("summer:ombrellone_n_" .. colour, {
+		{"", wool, ""},
+		{"default:paper", "default:stick", "default:paper"},
+		{"", "default:stick", ""},
+	})
+
+
+	
+	-- Chest
+	
+
+	local chest = "summer:chest" .. colour
+
+	register_craft(chest, {
+		{"default:stone", dye, "default:stone"},
+		{"group:wood", "", "group:wood"},
+		{"group:wood", "group:wood", "group:wood"},
+	})
+
+	register_craft("summer:chest_lock" .. colour, {
+		{chest, "default:diamond", ""},
+	})
 
 end
