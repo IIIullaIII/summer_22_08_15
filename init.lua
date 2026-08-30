@@ -11,6 +11,10 @@ end
 summer.S = S
 
 local path = minetest.get_modpath("summer")
+dofile(path .. "/papera.lua")
+dofile(path .. "/sparabolle.lua")
+dofile(path .. "/scivolo.lua")
+dofile(path .. "/ladders.lua")
 dofile(path.."/salvag.lua")
 dofile(path.."/ombrellone.lua")
 dofile(path.."/sdraia.lua")
