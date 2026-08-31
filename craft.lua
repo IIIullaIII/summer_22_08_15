@@ -1,7 +1,9 @@
 
 local S = summer.S
 
-if not minetest.get_modpath("wool") or not minetest.get_modpath("dye") then
+if not minetest.get_modpath("wool") 
+or not minetest.get_modpath("flowers")
+or not minetest.get_modpath("dye") then
 	return
 end
 
@@ -29,7 +31,22 @@ local function register_full_craft(output, count, item)
 	register_craft(output .. " " .. count, full_recipe(item))
 end
 
-
+--Scivolo
+register_craft("summer:scivolo_slope 10", {
+	{"group:wood", "default:steel_ingot", "group:wood"},
+	{"group:wood", "default:steel_ingot", "group:wood"},
+	{"group:wood", "default:steel_ingot", "group:wood"},
+})
+register_craft("summer:scivolo 5", {
+	{"group:wood", "default:steel_ingot", "group:wood"},
+	{"group:wood", "flowers:mushroom_red", "group:wood"},
+	{"group:wood", "group:wool", "group:wood"},
+})
+register_craft("summer:scivolo_top", {
+	{"default:stick", "default:steel_ingot", "default:stick"},
+	{"default:stick", "default:stick", "default:stick"},
+	{"default:stick", "default:gold_ingot", "default:stick"},
+})
 
 -- Rake
 
