@@ -30,7 +30,13 @@ end
 local function register_full_craft(output, count, item)
 	register_craft(output .. " " .. count, full_recipe(item))
 end
+--Bubblegun
 
+register_craft("summer:pistola", {
+	{"group:wood", "bucket:bucket_water", "default:coral_cyan"},
+	{"default:stick", "default:mese_crystal_fragment", ""},
+	{"default:stick", "", ""},
+	})
 --Scivolo
 register_craft("summer:scivolo_slope 10", {
 	{"group:wood", "default:steel_ingot", "group:wood"},
