@@ -511,34 +511,9 @@ minetest.register_craftitem(salvag_item_name, {
 		end,
 	})
 
-	minetest.register_craft({
-		output = salvag_item_name,
-		recipe = {
-			{"", "", ""},
-			{"group:leaves", "wool:" .. color, "group:leaves"},
-			{"default:paper", "group:leaves", "default:paper"},
-		},
-	})
 
-	if minetest.get_modpath("cannabis") then
-		minetest.register_craft({
-			output = salvag_item_name,
-			recipe = {
-				{"", "", ""},
-				{
-					"cannabis:canapa_plastic",
-					"wool:" .. color,
-					"cannabis:canapa_plastic"
-				},
-				{
-					"cannabis:canapa_plastic",
-					"cannabis:canapa_plastic",
-					"cannabis:canapa_plastic"
-				},
-			},
-		})
-	end
-end
+
+
 
 local colors = {
 	"black",
@@ -552,4 +527,5 @@ local colors = {
 
 for _, color in ipairs(colors) do
 	reg_salvag(color)
+end
 end

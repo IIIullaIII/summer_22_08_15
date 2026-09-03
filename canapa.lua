@@ -1,20 +1,60 @@
 local S = summer.S
 
-if minetest.get_modpath("wool") and minetest.get_modpath("dye")then
-local lchest_list = {
-	{ S("Red Chest"), "red"},
-	{ S("Orange Chest"), "orange"},
-    { S("Black Chest"), "black"},
-	{ S("Yellow Chest"), "yellow"},
-	{ S("Green Chest"), "green"},
-	{ S("Blue Chest"), "blue"},
-	{ S("Violet Chest"), "violet"},
-	{S("White Chest"), "white"}
-}
+if minetest.get_modpath("wool") and minetest.get_modpath("dye") then
+    local colours = {
+        "red",
+        "orange",
+        "black",
+        "yellow",
+        "green",
+        "blue",
+        "violet",
+        "white",
+    }
 
-for i in ipairs(lchest_list) do
-	local desc = lchest_list[i][1]
-	local colour = lchest_list[i][2]
+  
+    for _, colour in ipairs(colours) do
+        
+     
+
+        -- ____barca____----
+        minetest.register_craft({
+            -- CORRETTO: Usata la variabile "color" del ciclo for
+            output = "summer:barca2_" .. colour .. "_item",
+            recipe = {
+                {"", "", ""},
+                { "cannabis:canapa_plastic", "wool:" .. colour, "cannabis:canapa_plastic" },
+                { "cannabis:canapa_plastic", "cannabis:canapa_plastic", "cannabis:canapa_plastic" },
+            },
+        })
+   
+
+
+	--_____ materassino _____--
+
+		minetest.register_craft({
+			output ="summer:materassino_" .. colour .. "_item",
+			recipe = {
+				{"", "", ""},
+				{"cannabis:canapa_plastic", "wool:"..colour, ""},
+				{"cannabis:canapa_plastic", "cannabis:canapa_plastic", "cannabis:canapa_plastic"},
+			},
+		})
+	
+
+
+
+--____ salvagente______--
+
+		minetest.register_craft({
+			output ="summer:salvag_" .. colour .. "_item",
+			recipe = {
+				{"", "cannabis:canapa_plastic", ""},
+				{"cannabis:canapa_plastic", "wool:" .. colour, "cannabis:canapa_plastic"},
+				{"", "cannabis:canapa_plastic", ""},
+			},
+		})
+
 
 --_____ Deck chair _____--
 minetest.register_craft({
@@ -91,7 +131,7 @@ minetest.register_craft({
 
 --_____ Chest _____--
 minetest.register_craft({
-		output = "summer:chest"..colour.."",
+		output = "summer:modern_chest_"..colour.."",
 		recipe = {
 		{"cannabis:canapa_plastic","dye:"..colour.."","cannabis:canapa_plastic"},
 		{"group:wood","","group:wood"},
@@ -102,7 +142,7 @@ minetest.register_craft({
 
 
 	minetest.register_craft({
-		output = "summer:chest_lock"..colour.."",
+		output = "summer:locked_chest_"..colour.."",
 		recipe = {
 		{"summer:chest"..colour.."","cannabis:high_performance_ingot",""}
 		--{"","",""},
@@ -110,7 +150,17 @@ minetest.register_craft({
 
 		}
 	})
+	minetest.register_craft({
+		output = "summer:protected_chest_"..colour.."",
+		recipe = {
+		{"summer:chest"..colour.."","cannabis:fibra_ingot",""}
+		--{"","",""},
+		--{"","",""}
+
+		}
+	})
 
 end
-end
 
+
+end

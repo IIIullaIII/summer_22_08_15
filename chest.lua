@@ -19,9 +19,95 @@ local function get_dir_vector(dir)
 	return dirs[dir + 1] or {x=0, y=0, z=0}
 end
 
-local function has_chest_privilege(meta, player, is_locked)
+-- Restituisce il "tipo" di protezione di una chest a partire dal nome del nodo.
+-- "none"      = chest libera, chiunque può usarla e romperla
+-- "locked"    = solo il proprietario (o chi ha protection_bypass) può aprirla e romperla
+-- "protected" = il proprietario più i giocatori condivisi possono aprirla,
+--               ma SOLO il proprietario (o protection_bypass) può romperla
+local function get_chest_kind(node_name)
+	if node_name:match("^summer:locked_chest_") then
+		return "locked"
+	elseif node_name:match("^summer:protected_chest_") then
+		return "protected"
+	end
+	return "none"
+end
+
+-- Lista dei nomi condivisi, salvata come stringa separata da virgole nei meta.
+local function get_shared_list(meta)
+	local raw = meta:get_string("shared_players")
+	local list = {}
+	if raw ~= "" then
+		for name in raw:gmatch("[^,]+") do
+			table.insert(list, name)
+		end
+	end
+	return list
+end
+
+local function set_shared_list(meta, list)
+	meta:set_string("shared_players", table.concat(list, ","))
+end
+
+local function is_shared_player(meta, name)
+	for _, n in ipairs(get_shared_list(meta)) do
+		if n:lower() == name:lower() then return true end
+	end
+	return false
+end
+
+local function add_shared_player(meta, name)
+	name = name:match("^%s*(.-)%s*$")
+	if name == "" then return false end
+	if is_shared_player(meta, name) then return false end
+	local list = get_shared_list(meta)
+	table.insert(list, name)
+	set_shared_list(meta, list)
+	return true
+end
+
+local function remove_shared_player(meta, name)
+	name = name:match("^%s*(.-)%s*$")
+	local list = get_shared_list(meta)
+	local newlist, removed = {}, false
+	for _, n in ipairs(list) do
+		if n:lower() == name:lower() then
+			removed = true
+		else
+			table.insert(newlist, n)
+		end
+	end
+	if removed then set_shared_list(meta, newlist) end
+	return removed
+end
+
+-- Privilegio di APERTURA/USO della chest (mettere/prendere oggetti, aprire il formspec).
+local function has_chest_privilege(meta, player, kind)
+	if kind == "none" then return true end
+	if not player or not player:is_player() then return false end
+	if minetest.check_player_privs(player, {protection_bypass = true}) then return true end
+
 	local owner = meta:get_string("owner")
-	if not is_locked then return true end
+	if owner == "" then return false end
+
+	local name = player:get_player_name()
+	if owner == name then return true end
+
+	if kind == "protected" and is_shared_player(meta, name) then
+		return true
+	end
+
+	return false
+end
+
+-- Privilegio di ROTTURA della chest: SOLO il proprietario (mai i giocatori condivisi).
+-- Così chi ha solo accesso condiviso non può rompere la chest e "diventarne" owner
+-- ripiazzandola altrove.
+local function has_dig_privilege(meta, player, kind)
+	if kind == "none" then return true end
+	if not player then return false end
+	if minetest.check_player_privs(player, {protection_bypass = true}) then return true end
+	local owner = meta:get_string("owner")
 	if owner == "" then return false end
 	return owner == player:get_player_name()
 end
@@ -289,6 +375,12 @@ local function place_chest_with_rightclick_priority(itemstack, placer, pointed_t
 				return node_def.on_rightclick(pos, node, placer, itemstack, pointed_thing) or itemstack
 			end
 		end
+
+		local place_pos = minetest.get_pointed_thing_position(pointed_thing, false)
+		if place_pos and not minetest.check_player_privs(placer, {protection_bypass = true})
+			and minetest.is_protected(place_pos, placer:get_player_name()) then
+			return itemstack
+		end
 	end
 
 	return minetest.item_place_node(itemstack, placer, pointed_thing)
@@ -328,9 +420,12 @@ local function get_chest_slot_frames(pos)
 	return table.concat(frames)
 end
 
-local function get_chest_formspec(pos, meta, confirm_clear)
+-- viewer_name: nome del giocatore che sta guardando il formspec (serve solo per la
+-- protected chest, per decidere se mostrare i campi di modifica della lista condivisi).
+local function get_chest_formspec(pos, meta, confirm_clear, viewer_name)
 	local name = meta:get_string("custom_name") or S("Chest")
 	local spos = pos.x .. "," .. pos.y .. "," .. pos.z
+	local kind = get_chest_kind(minetest.get_node(pos).name)
 
 	if confirm_clear then
 		local line1 = minetest.colorize("#FF0000", S("WARNING:")) .. "\n"
@@ -348,6 +443,20 @@ local function get_chest_formspec(pos, meta, confirm_clear)
 			"button[9,4.0;3,1;confirm_clear_no;" .. S("No") .. "]"
 	end
 
+	-- Sulla protected chest, il proprietario vede solo un pulsante che apre una
+	-- pagina dedicata (niente campi accatastati qui: non c'è spazio a sufficienza
+	-- per una vera lista con un pulsante di rimozione per ogni nome).
+	local share_ui = ""
+	if kind == "protected" then
+		local owner = meta:get_string("owner")
+		if viewer_name and viewer_name == owner then
+			local count = #get_shared_list(meta)
+			share_ui =
+				"label[9.0,2.5;" .. minetest.formspec_escape(S("Member count @1 player(s)", count)) .. "]" ..
+				"button[13.4,1.7;2.5,1;btn_manage_share;" .. S("Set Member") .. "]"
+		end
+	end
+
 	return "formspec_version[4]" ..
 		"size[22,19.5]" ..
 		"background[0,0;0,0;summer_chest_bg.png;true]" ..
@@ -355,11 +464,12 @@ local function get_chest_formspec(pos, meta, confirm_clear)
 		"label[1.1,1.5;" .. minetest.colorize("#FFFF00", name) .. "]" ..
 		"field[4.5,1.0;6,1;rename;" .. S("New name") .. ";]" ..
 		"button[10.7,1.0;2,1;setname;" .. S("Rename") .. "]" ..
-		"button[13.4,0.5;1.9,1;clear_all;" .. minetest.colorize("#FF0000", S("CLEAR")) .. "]" ..
-		"button[15.6,0.5;2.2,1;sort_name;" .. S("Sort Name") .. "]" ..
-		"button[18.0,0.5;2.2,1;sort_item;" .. S("Sort Item") .. "]" ..
-		"button[15.6,1.7;2.2,1;sort_stack;" .. S("Sort Stack") .. "]" ..
-		"button[18.0,1.7;2.2,1;sort_mod;" .. S("Sort Mod") .. "]" ..
+		"button[13.4,0.5;2.5,1;clear_all;" .. minetest.colorize("#FF0000", S("CLEAR")) .. "]" ..
+		"button[16.0,0.5;2.6,1;sort_name;" .. S("Sort Name") .. "]" ..
+		"button[18.9,0.5;2.5,1;sort_item;" .. S("Sort Item") .. "]" ..
+		"button[16.0,1.7;2.6,1;sort_stack;" .. S("Sort Stack") .. "]" ..
+		"button[18.9,1.7;2.5,1;sort_mod;" .. S("Sort Mod") .. "]" ..
+		share_ui ..
 		-- Transfer controls: bottom-right area, outside the player's inventory.
 		"button[14.0,13.6;6.3,1;inv_to_chest;" .. S("Inv -> Chest") .. "]" ..
 		"button[14.0,14.8;6.3,1;chest_to_inv;" .. S("Chest -> Inv") .. "]" ..
@@ -392,6 +502,36 @@ local function get_chest_formspec(pos, meta, confirm_clear)
 		"image[11.75,13.8;1,1;gui_hb_bg.png]"
 end
 
+-- Pagina dedicata alla gestione della lista condivisi di una protected chest.
+-- Mostra un campo per aggiungere un nome e, sotto, una riga per ciascun
+-- giocatore già condiviso con il proprio pulsante "Rimuovi" a fianco.
+local function get_chest_share_formspec(pos, meta)
+	local name = meta:get_string("custom_name") or S("Chest")
+	local shared_list = get_shared_list(meta)
+
+	local rows = ""
+	for i, pname in ipairs(shared_list) do
+		local y = 2.6 + (i - 1) * 0.9
+		rows = rows ..
+			"label[0.5," .. (y + 0.55) .. ";" .. minetest.formspec_escape(pname) .. "]" ..
+			"button[7.0," .. y .. ";2.7,0.8;remove_share_" .. i .. ";" .. S("Remove") .. "]"
+	end
+	if #shared_list == 0 then
+		rows = "label[0.5,2.6;" .. minetest.formspec_escape(S("(no one shared yet)")) .. "]"
+	end
+
+	return "formspec_version[4]" ..
+		"size[10,14]" ..
+		"bgcolor[#080808BB;true]" ..
+		"background[0,0;10,14;gui_formbg.png;true]" ..
+		"label[0.5,0.5;" .. minetest.colorize("#FFFF00", S("Member List") .. ": " .. name) .. "]" ..
+		"field[0.5,1.4;6.3,1;share_add;" .. S("Player name") .. ";]" ..
+		"button[6.9,1.4;2.6,1;btn_share_add;" .. S("Add") .. "]" ..
+		"label[0.6,2.2;" .. S("Add Member") .. ":]" ..
+		rows ..
+		"button[0.5,12.0;3,1;btn_share_back;" .. S("Back") .. "]"
+end
+
 local function close_chest_sound(player)
 	local name = player:get_player_name()
 	local data = open_chests[name]
@@ -416,9 +556,9 @@ minetest.register_on_player_receive_fields(function(player, formname, fields)
 
 	local meta = minetest.get_meta(pos)
 	local node_name = minetest.get_node(pos).name
-	local is_locked = node_name:match("locked_chest")
-	
-	if not has_chest_privilege(meta, player, is_locked) then return end
+	local kind = get_chest_kind(node_name)
+
+	if not has_chest_privilege(meta, player, kind) then return end
 
 	local inv = meta:get_inventory()
 	if not inv then return end
@@ -428,6 +568,13 @@ minetest.register_on_player_receive_fields(function(player, formname, fields)
 			to_player = player:get_player_name(),
 			gain = 0.5,
 		})
+	end
+
+	-- Apre la pagina dedicata alla condivisione (solo owner della protected chest).
+	if fields.btn_manage_share and kind == "protected" and player:get_player_name() == meta:get_string("owner") then
+		play_button_sound()
+		minetest.show_formspec(player:get_player_name(), "summer:chest_share_form", get_chest_share_formspec(pos, meta))
+		return
 	end
 
 	if fields.setname and fields.rename and fields.rename ~= "" then
@@ -447,28 +594,28 @@ minetest.register_on_player_receive_fields(function(player, formname, fields)
 	if fields.inv_to_chest then
 		move_inventory_to_chest(player, inv, false)
 		play_button_sound()
-		minetest.show_formspec(player:get_player_name(), "summer:modern_chest_form", get_chest_formspec(pos, meta))
+		minetest.show_formspec(player:get_player_name(), "summer:modern_chest_form", get_chest_formspec(pos, meta, false, player:get_player_name()))
 		return
 	end
 
 	if fields.chest_to_inv then
 		move_chest_to_inventory(player, inv, false)
 		play_button_sound()
-		minetest.show_formspec(player:get_player_name(), "summer:modern_chest_form", get_chest_formspec(pos, meta))
+		minetest.show_formspec(player:get_player_name(), "summer:modern_chest_form", get_chest_formspec(pos, meta, false, player:get_player_name()))
 		return
 	end
 
 	if fields.inv_to_chest_present then
 		move_inventory_to_chest(player, inv, true)
 		play_button_sound()
-		minetest.show_formspec(player:get_player_name(), "summer:modern_chest_form", get_chest_formspec(pos, meta))
+		minetest.show_formspec(player:get_player_name(), "summer:modern_chest_form", get_chest_formspec(pos, meta, false, player:get_player_name()))
 		return
 	end
 
 	if fields.chest_to_inv_present then
 		move_chest_to_inventory(player, inv, true)
 		play_button_sound()
-		minetest.show_formspec(player:get_player_name(), "summer:modern_chest_form", get_chest_formspec(pos, meta))
+		minetest.show_formspec(player:get_player_name(), "summer:modern_chest_form", get_chest_formspec(pos, meta, false, player:get_player_name()))
 		return
 	end
 
@@ -483,11 +630,11 @@ minetest.register_on_player_receive_fields(function(player, formname, fields)
 		minetest.chat_send_player(player:get_player_name(), S("Chest cleared."))
 		play_button_sound()
 		close_chest_sound(player)
-		minetest.show_formspec(player:get_player_name(), "summer:modern_chest_form", get_chest_formspec(pos, meta))
+		minetest.show_formspec(player:get_player_name(), "summer:modern_chest_form", get_chest_formspec(pos, meta, false, player:get_player_name()))
 	elseif fields.confirm_clear_no then
 		play_button_sound()
 		close_chest_sound(player)
-		minetest.show_formspec(player:get_player_name(), "summer:modern_chest_form", get_chest_formspec(pos, meta))
+		minetest.show_formspec(player:get_player_name(), "summer:modern_chest_form", get_chest_formspec(pos, meta, false, player:get_player_name()))
 	end
 
 	if fields.sort_name then
@@ -511,6 +658,70 @@ minetest.register_on_player_receive_fields(function(player, formname, fields)
 	if not (fields.clear_all or fields.confirm_clear_no or fields.confirm_clear_yes) then
 		close_chest_sound(player)
 	end
+end)
+
+-- Pagina dedicata: aggiunta/rimozione dei giocatori con cui condividere una
+-- protected chest. Solo l'owner può modificarla; qui i nomi vengono davvero
+-- memorizzati (meta:set_string sulla chest), non solo mostrati.
+minetest.register_on_player_receive_fields(function(player, formname, fields)
+	if formname ~= "summer:chest_share_form" then return end
+
+	local pos_str = player:get_meta():get_string("modern_chest_pos")
+	if pos_str == "" then return end
+
+	local pos = minetest.string_to_pos(pos_str)
+	if not pos then return end
+
+	local meta = minetest.get_meta(pos)
+	local kind = get_chest_kind(minetest.get_node(pos).name)
+
+	-- Solo l'owner di una protected chest arriva fin qui con privilegi di modifica.
+	if kind ~= "protected" or player:get_player_name() ~= meta:get_string("owner") then
+		return
+	end
+
+	local function play_button_sound()
+		minetest.sound_play("click", {
+			to_player = player:get_player_name(),
+			gain = 0.5,
+		})
+	end
+
+	if fields.btn_share_add and fields.share_add and fields.share_add ~= "" then
+		if add_shared_player(meta, fields.share_add) then
+			minetest.chat_send_player(player:get_player_name(), S("Player @1 added to shared list.", fields.share_add))
+		else
+			minetest.chat_send_player(player:get_player_name(), S("Player @1 is already shared or invalid.", fields.share_add))
+		end
+		play_button_sound()
+		minetest.show_formspec(player:get_player_name(), "summer:chest_share_form", get_chest_share_formspec(pos, meta))
+		return
+	end
+
+	for field_name in pairs(fields) do
+		local idx = field_name:match("^remove_share_(%d+)$")
+		if idx then
+			local shared_list = get_shared_list(meta)
+			local removed_name = shared_list[tonumber(idx)]
+			if removed_name then
+				remove_shared_player(meta, removed_name)
+				minetest.chat_send_player(player:get_player_name(), S("Player @1 removed from shared list.", removed_name))
+			end
+			play_button_sound()
+			minetest.show_formspec(player:get_player_name(), "summer:chest_share_form", get_chest_share_formspec(pos, meta))
+			return
+		end
+	end
+
+	if fields.btn_share_back then
+		play_button_sound()
+		minetest.show_formspec(player:get_player_name(), "summer:modern_chest_form", get_chest_formspec(pos, meta, false, player:get_player_name()))
+		return
+	end
+
+	-- Se arriviamo qui, la pagina è stata chiusa senza premere Back (es. ESC):
+	-- riproduci comunque il suono di chiusura della chest.
+	close_chest_sound(player)
 end)
 
 local function force_face_player_delayed(pos, placer)
@@ -572,7 +783,7 @@ for _, colour in ipairs(colors) do
 		on_rightclick = function(pos, node, clicker)
 			local meta = minetest.get_meta(pos)
 			clicker:get_meta():set_string("modern_chest_pos", minetest.pos_to_string(pos))
-			minetest.show_formspec(clicker:get_player_name(), "summer:modern_chest_form", get_chest_formspec(pos, meta))
+			minetest.show_formspec(clicker:get_player_name(), "summer:modern_chest_form", get_chest_formspec(pos, meta, false, clicker:get_player_name()))
 			minetest.sound_play("chest_open", {
 				pos = pos,
 				gain = 0.5,
@@ -643,11 +854,15 @@ for _, colour in ipairs(colors) do
 		tiles = {
 			"chest_top_" .. colour .. ".png", "chest_top_" .. colour .. ".png",
 			"chest_side_" .. colour .. ".png", "chest_side_" .. colour .. ".png",
-			"chest_side_" .. colour .. ".png", "chest_lock_" .. colour .. ".png"
+			"chest_side_" .. colour .. ".png", "chest_front_" .. colour .. ".png^l_symbol.png"
 		},
 		groups = {choppy = 2, oddly_breakable_by_hand = 2, tubed = 1, tubedevice = 1, tubedevice_receiver = 1, hopper_container = 1},
 		paramtype2 = "facedir",
 		on_place = place_chest_with_rightclick_priority,
+		can_dig = function(pos, player)
+			local meta = minetest.get_meta(pos)
+			return has_dig_privilege(meta, player, "locked")
+		end,
 		on_construct = function(pos)
 			local meta = minetest.get_meta(pos)
 			meta:set_string("owner", "")
@@ -667,13 +882,13 @@ for _, colour in ipairs(colors) do
 				owner = player_name
 			end
 
-			if not has_chest_privilege(meta, clicker, true) then
+			if not has_chest_privilege(meta, clicker, "locked") then
 				minetest.chat_send_player(player_name, S("This chest is locked by @1", owner))
 				return
 			end
 
 			clicker:get_meta():set_string("modern_chest_pos", minetest.pos_to_string(pos))
-			minetest.show_formspec(player_name, "summer:modern_chest_form", get_chest_formspec(pos, meta))
+			minetest.show_formspec(player_name, "summer:modern_chest_form", get_chest_formspec(pos, meta, false, player_name))
 			minetest.sound_play("chest_open", {
 				pos = pos,
 				gain = 0.5,
@@ -790,15 +1005,112 @@ for _, colour in ipairs(colors) do
 	}
 	minetest.register_node("summer:locked_chest_" .. colour, def_lock)
 
+	-- Protected chest: come la locked, MA in più chi è nella lista "shared_players"
+	-- può aprirla e usarla (senza poterla mai rompere/spostare). La lista è gestita
+	-- solo dall'owner tramite il formspec. Nessuna dipendenza dal mod "protector":
+	-- il sistema è interamente interno alla mod.
+	local def_protected = {
+		description = S("Protected Chest") .. " (" .. colour .. ")",
+		tiles = {
+			"chest_top_" .. colour .. ".png", "chest_top_" .. colour .. ".png",
+			"chest_side_" .. colour .. ".png", "chest_side_" .. colour .. ".png",
+			"chest_side_" .. colour .. ".png","chest_front_" .. colour .. ".png^p_symbol.png"
+		},
+		groups = {choppy = 2, oddly_breakable_by_hand = 2, tubed = 1, tubedevice = 1, tubedevice_receiver = 1, hopper_container = 1},
+		paramtype2 = "facedir",
+		on_place = place_chest_with_rightclick_priority,
+		can_dig = function(pos, player)
+			local meta = minetest.get_meta(pos)
+			return has_dig_privilege(meta, player, "protected")
+		end,
+		on_construct = function(pos)
+			local meta = minetest.get_meta(pos)
+			meta:set_string("owner", "")
+			meta:set_string("shared_players", "")
+			meta:set_string("infotext", S("Protected Chest"))
+			meta:set_string("custom_name", S("Protected Chest"))
+			meta:get_inventory():set_size("main", 16 * 8)
+			init_filter_lists(pos)
+		end,
+		on_rightclick = function(pos, node, clicker)
+			local meta = minetest.get_meta(pos)
+			local player_name = clicker:get_player_name()
+			local owner = meta:get_string("owner")
+
+			if owner == "" then
+				meta:set_string("owner", player_name)
+				meta:set_string("infotext", S("Protected Chest (Owned by @1)", player_name))
+				owner = player_name
+			end
+
+			if not has_chest_privilege(meta, clicker, "protected") then
+				minetest.chat_send_player(player_name, S("This chest is protected by @1", owner))
+				return
+			end
+
+			clicker:get_meta():set_string("modern_chest_pos", minetest.pos_to_string(pos))
+			minetest.show_formspec(player_name, "summer:modern_chest_form", get_chest_formspec(pos, meta, false, player_name))
+			minetest.sound_play("chest_open", {
+				pos = pos,
+				gain = 0.5,
+				max_hear_distance = 8,
+			})
+			open_chests[player_name] = {
+				pos = {x = pos.x, y = pos.y, z = pos.z},
+			}
+		end,
+		preserve_metadata = preserve_chest_item,
+		on_destruct = def.on_destruct,
+		on_metadata_inventory_put = handle_filter_put,
+		on_metadata_inventory_move = handle_filter_move,
+		-- Stessa logica di estrazione via tubi/pipeworks della locked chest: si basa
+		-- solo sul campo "owner", non sulla lista condivisi (i tubi non "sanno" chi
+		-- li ha collegati, quindi restano ristretti come per la locked).
+		pipeworks = def_lock.pipeworks,
+		tube = def_lock.tube,
+		on_inv_request = def.on_inv_request,
+		on_push_item = def_lock.on_push_item,
+		on_pull_item = def_lock.on_pull_item,
+		on_unpull_item = def_lock.on_unpull_item,
+		after_place_node = function(pos, placer, itemstack)
+			restore_chest_item(pos, placer, itemstack)
+			force_face_player_delayed(pos, placer)
+
+			if placer and placer:is_player() then
+				local name = placer:get_player_name()
+				local meta = minetest.get_meta(pos)
+				if meta:get_string("owner") == "" then
+					meta:set_string("owner", name)
+				end
+				if minetest.get_modpath("techage") and techage.add_node then
+					local number = techage.add_node(pos, "techage:chest_ta3")
+					meta:set_string("node_number", number)
+				end
+				local owner = meta:get_string("owner")
+				local infotext = meta:get_string("custom_name")
+				if owner ~= "" then
+					infotext = infotext .. " " .. S("(Owned by @1)", owner)
+				end
+				local number = meta:get_string("node_number")
+				if number ~= "" then infotext = infotext .. " " .. number end
+				meta:set_string("infotext", infotext)
+			end
+		end,
+	}
+	minetest.register_node("summer:protected_chest_" .. colour, def_protected)
+
 	if minetest.get_modpath("tubelib2") then
-		local n1, n2 = "summer:modern_chest_" .. colour, "summer:locked_chest_" .. colour
+		local n1, n2, n3 = "summer:modern_chest_" .. colour, "summer:locked_chest_" .. colour, "summer:protected_chest_" .. colour
 		minetest.registered_nodes[n1].tubelib2_on_update2 = function() end
 		minetest.registered_nodes[n1].tubelib2_on_update = function() end
 		minetest.registered_nodes[n2].tubelib2_on_update2 = function() end
 		minetest.registered_nodes[n2].tubelib2_on_update = function() end
+		minetest.registered_nodes[n3].tubelib2_on_update2 = function() end
+		minetest.registered_nodes[n3].tubelib2_on_update = function() end
 	end
 	minetest.register_alias("summer:chest" .. colour, "summer:modern_chest_" .. colour)
 	minetest.register_alias("summer:chest_lock" .. colour, "summer:locked_chest_" .. colour)
+	minetest.register_alias("summer:chest_protected" .. colour, "summer:protected_chest_" .. colour)
 end
 
 if minetest.get_modpath("pipeworks") and pipeworks.register_tube_compatibility then
@@ -806,6 +1118,7 @@ if minetest.get_modpath("pipeworks") and pipeworks.register_tube_compatibility t
 	for _, colour in ipairs(colors) do
 		table.insert(pipe_nodes, "summer:modern_chest_" .. colour)
 		table.insert(pipe_nodes, "summer:locked_chest_" .. colour)
+		table.insert(pipe_nodes, "summer:protected_chest_" .. colour)
 	end
 	pipeworks.register_tube_compatibility(pipe_nodes)
 end
@@ -813,22 +1126,34 @@ end
 minetest.register_on_mods_loaded(function()
 	if techage then
 		for _, colour in ipairs(colors) do
-			local n1, n2 = "summer:modern_chest_" .. colour, "summer:locked_chest_" .. colour
+			local n1 = "summer:modern_chest_" .. colour
+			local n2 = "summer:locked_chest_" .. colour
+			local n3 = "summer:protected_chest_" .. colour
 			if techage.Tube and techage.Tube.secondary_node_names then
 				techage.Tube.secondary_node_names[n1] = true
 				techage.Tube.secondary_node_names[n2] = true
+				techage.Tube.secondary_node_names[n3] = true
 			end
 			if techage.KnownNodes then
 				techage.KnownNodes[n1] = true
 				techage.KnownNodes[n2] = true
+				techage.KnownNodes[n3] = true
 			end
 		end
 		for key, value in pairs(techage) do
 			if type(value) == "table" and (value["techage:chest_ta3"] ~= nil or key:match("node") or key:match("mach")) then
 				for _, colour in ipairs(colors) do
-					local n1, n2 = "summer:modern_chest_" .. colour, "summer:locked_chest_" .. colour
-					value[n1] = { on_inv_request = minetest.registered_nodes[n1].on_inv_request, on_push_item = minetest.registered_nodes[n1].on_push_item, on_pull_item = minetest.registered_nodes[n1].on_pull_item, on_unpull_item = minetest.registered_nodes[n1].on_unpull_item }
-					value[n2] = { on_inv_request = minetest.registered_nodes[n2].on_inv_request, on_push_item = minetest.registered_nodes[n2].on_push_item, on_pull_item = minetest.registered_nodes[n2].on_pull_item, on_unpull_item = minetest.registered_nodes[n2].on_unpull_item }
+					local n1 = "summer:modern_chest_" .. colour
+					local n2 = "summer:locked_chest_" .. colour
+					local n3 = "summer:protected_chest_" .. colour
+					for _, n in ipairs({n1, n2, n3}) do
+						value[n] = {
+							on_inv_request = minetest.registered_nodes[n].on_inv_request,
+							on_push_item = minetest.registered_nodes[n].on_push_item,
+							on_pull_item = minetest.registered_nodes[n].on_pull_item,
+							on_unpull_item = minetest.registered_nodes[n].on_unpull_item,
+						}
+					end
 				end
 			end
 		end

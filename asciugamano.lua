@@ -1,9 +1,9 @@
 
-summer_fur = {}
+summer_lay = {}
 
---_____ If true, you can sit on chairs and benches, when right-click them. _____--
-summer_fur.enable_layng = minetest.settings:get_bool("summer_fur.enable_layng", true)
-summer_fur.globalstep = minetest.settings:get_bool("summer_fur.globalstep", true)
+--_____ If true, you can lay on towel and benches, when right-click them. _____--
+summer_lay.enable_layng = minetest.settings:get_bool("summer_lay.enable_layng", true)
+summer_lay.globalstep = minetest.settings:get_bool("summer_lay.globalstep", true)
 
 
 --_____ Used for localization _____--
@@ -27,8 +27,8 @@ end
 
 --_____ The following code is from "Get Comfortable [cozy]" (by everamzah; published under WTFPL) _____--
 --_____ Thomas S. modified it, so that it can be used in this mod _____--
-if summer_fur.enable_layng then
-	summer_fur.lay = function(pos, _, player)
+if summer_lay.enable_layng then
+	summer_lay.lay = function(pos, _, player)
 		local name = player:get_player_name()
 		if not player_api.player_attached[name] then
 			if vector.length(player:get_velocity()) > 0.5 then
@@ -38,9 +38,9 @@ if summer_fur.enable_layng then
 			player:move_to(pos)
 			player:set_eye_offset({x = 0, y = 0.5, z = 2}, {x = 0, y = 0.2, z = 0})
 			if has_player_monoids then
-				player_monoids.speed:add_change(player, 0, "summer_fur:lay")
-				player_monoids.jump:add_change(player, 0, "summer_fur:lay")
-				player_monoids.gravity:add_change(player, 0, "summer_fur:lay")
+				player_monoids.speed:add_change(player, 0, "summer_lay:lay")
+				player_monoids.jump:add_change(player, 0, "summer_lay:lay")
+				player_monoids.gravity:add_change(player, 0, "summer_lay:lay")
 			else
 				player:set_physics_override({speed = 0, jump = 0, gravity = 0})
 			end
@@ -51,23 +51,23 @@ if summer_fur.enable_layng then
 				end
 			end)
 		else
-			summer_fur.stand(player, name)
+			summer_lay.stand(player, name)
 		end
 	end
 
-	summer_fur.st = function(_, _, player)
+	summer_lay.st = function(_, _, player)
 		local name = player:get_player_name()
 		if player_api.player_attached[name] then
-			summer_fur.stand(player, name)
+			summer_lay.stand(player, name)
 		end
 	end
 
-	summer_fur.stand = function(player, name)
+	summer_lay.stand = function(player, name)
 		player:set_eye_offset({x = 0, y = 0, z = 0}, {x = 0, y = 0, z = 0})
 		if has_player_monoids then
-			player_monoids.speed:del_change(player, "summer_fur:lay")
-			player_monoids.jump:del_change(player, "summer_fur:lay")
-			player_monoids.gravity:del_change(player, "summer_fur:lay")
+			player_monoids.speed:del_change(player, "summer_lay:lay")
+			player_monoids.jump:del_change(player, "summer_lay:lay")
+			player_monoids.gravity:del_change(player, "summer_lay:lay")
 		else
 			player:set_physics_override({speed = 1, jump = 1, gravity = 1})
 		end
@@ -76,7 +76,7 @@ if summer_fur.enable_layng then
 	end
 
 	--_____ The player will stand at the beginning of the movement _____--
-	if summer_fur.globalstep  then
+	if summer_lay.globalstep  then
 		minetest.register_globalstep(function(dtime)
 			local players = minetest.get_connected_players()
 			for i = 1, #players do
@@ -85,7 +85,7 @@ if summer_fur.enable_layng then
 				local ctrl = player:get_player_control()
 				if default.player_attached[name] and not player:get_attach() and
 				(ctrl.up or ctrl.down or ctrl.left or ctrl.right or ctrl.jump) then
-					summer_fur.st(nil, nil, player)
+					summer_lay.st(nil, nil, player)
 				end
 			end
 		end)
@@ -112,9 +112,9 @@ for i in ipairs(Asciugamano_list) do
 	    drawtype = "mesh",
 		mesh = "asciugamano.obj",
 	    tiles = {"asciugsmano_"..colour..".png"},
-        inventory_image = "asciugsmano_a_"..colour..".png",
+        inventory_image = "asciugsmano_"..colour..".png",
 
-        wield_image  = "asciugsmano_a_"..colour..".png",
+        wield_image  = "asciugsmano_"..colour..".png",
 
 	    paramtype = "light",
 	    paramtype2 = "facedir",
@@ -128,10 +128,10 @@ for i in ipairs(Asciugamano_list) do
 		--sounds = default.node_sound_wood_defaults(),
         drop = "summer:asciugamano_"..colour.."",
 		on_rightclick = function(pos, node, clicker, itemstack, pointed_thing)
-				return summer_fur.lay( pos, node, clicker, itemstack, pointed_thing );
+				return summer_lay.lay( pos, node, clicker, itemstack, pointed_thing );
 				end ,
 		on_punch =	function(pos, node, clicker, itemstack, pointed_thing)
-				return summer_fur.st( pos, node, clicker, itemstack, pointed_thing );
+				return summer_lay.st( pos, node, clicker, itemstack, pointed_thing );
 			end
 
 
@@ -139,5 +139,5 @@ for i in ipairs(Asciugamano_list) do
 
 
 end
-    --state=true: lay, state=false: stand up
+  
 
