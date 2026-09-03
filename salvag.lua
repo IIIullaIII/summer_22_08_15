@@ -510,7 +510,7 @@ minetest.register_craftitem(salvag_item_name, {
 			return itemstack
 		end,
 	})
-
+end
 
 
 
@@ -528,4 +528,4 @@ local colors = {
 for _, color in ipairs(colors) do
 	reg_salvag(color)
 end
-end
+
