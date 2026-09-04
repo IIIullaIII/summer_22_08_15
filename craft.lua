@@ -35,9 +35,9 @@ register_craft("summer:pistola", {
 
 -- Scivolo
 register_craft("summer:scivolo_slope 10", {
+    {"group:wood", "", "group:wood"},
     {"group:wood", "default:steel_ingot", "group:wood"},
-    {"group:wood", "default:steel_ingot", "group:wood"},
-    {"group:wood", "default:steel_ingot", "group:wood"},
+    {"group:wood", "", "group:wood"},
 })
 register_craft("summer:scivolo 5", {
     {"group:wood", "default:steel_ingot", "group:wood"},
