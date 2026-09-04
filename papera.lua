@@ -412,9 +412,9 @@ else
 	minetest.register_craft({
 		output = paperella_item_name,
 		recipe = {
-			{"default:paper", "group:leaves", "default:paper"},
-			{"group:leaves", "wool:yellow", "group:leaves"},
-			{"default:paper", "group:leaves", "default:paper"},
+			{"group:leaves", "default:paper", "group:leaves"},
+			{"default:paper", "wool:yellow", "default:paper"},
+			{"group:leaves", "default:paper", "group:leaves"},
 		},
 	}) 
 end
